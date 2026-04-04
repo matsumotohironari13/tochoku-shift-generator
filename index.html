@@ -135,6 +135,10 @@ input[type=number]:focus{border-color:#555}
           <th>休日<br>当直</th>
           <th>平日<br>oncall</th>
           <th>休日<br>oncall</th>
+          <th>当直計</th>
+          <th>oncall計</th>
+          <th>当直計</th>
+          <th>oncall計</th>
         </tr>
       </thead>
       <tbody id="cfg-body"></tbody>
@@ -145,6 +149,8 @@ input[type=number]:focus{border-color:#555}
           <td id="sum-tH" style="font-weight:600"></td>
           <td id="sum-ocW" style="font-weight:600"></td>
           <td id="sum-ocH" style="font-weight:600"></td>
+          <td id="sum-tTotal" style="font-weight:600"></td>
+          <td id="sum-ocTotal" style="font-weight:600"></td>
         </tr>
         <tr>
           <td class="left" style="color:#888;font-size:11px">必要数</td>
@@ -152,6 +158,8 @@ input[type=number]:focus{border-color:#555}
           <td id="need-tH" style="color:#888;font-size:11px"></td>
           <td id="need-ocW" style="color:#888;font-size:11px"></td>
           <td id="need-ocH" style="color:#888;font-size:11px"></td>
+          <td id="need-tTotal" style="color:#888;font-size:11px"></td>
+          <td id="need-ocTotal" style="color:#888;font-size:11px"></td>
         </tr>
       </tfoot>
     </table>
@@ -315,6 +323,16 @@ function updateSums(){
     const nel=document.getElementById('need-'+k);
     if(nel)nel.textContent=need;
   });
+  // 当直計・oncall計
+  const tTotal=sums.tW+sums.tH;
+  const ocTotal=sums.ocW+sums.ocH;
+  const need=wdays+heavy;
+  const elT=document.getElementById('sum-tTotal');if(elT){elT.textContent=tTotal;elT.style.color=color(tTotal,need);}
+  const elO=document.getElementById('sum-ocTotal');if(elO){elO.textContent=ocTotal;elO.style.color=color(ocTotal,need);}
+  const elNT=document.getElementById('need-tTotal');if(elNT)elNT.textContent=need;
+  const elNO=document.getElementById('need-ocTotal');if(elNO)elNO.textContent=need;
+  // 個人別合計列を再描画
+  renderConfig();
 }
 
 function renderConfig(){
@@ -322,12 +340,16 @@ function renderConfig(){
   tbody.innerHTML=doctors.map(d=>{
     const cfg=monthConfig[d.name]||{tW:0,tH:0,ocW:0,ocH:0};
     const disT=!d.canTochoku;const disO=!d.canOncall;
+    const tTotal=(cfg.tW||0)+(cfg.tH||0);
+    const ocTotal=(cfg.ocW||0)+(cfg.ocH||0);
     return`<tr>
       <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d.color};margin-right:5px"></span>${d.name}</td>
       <td><input type="number" min="0" max="15" value="${cfg.tW}" onchange="updateConfig('${d.name}','tW',this.value)" ${disT?'disabled style="opacity:.3"':''}></td>
       <td><input type="number" min="0" max="15" value="${cfg.tH}" onchange="updateConfig('${d.name}','tH',this.value)" ${disT?'disabled style="opacity:.3"':''}></td>
       <td><input type="number" min="0" max="15" value="${cfg.ocW}" onchange="updateConfig('${d.name}','ocW',this.value)" ${disO?'disabled style="opacity:.3"':''}></td>
       <td><input type="number" min="0" max="15" value="${cfg.ocH}" onchange="updateConfig('${d.name}','ocH',this.value)" ${disO?'disabled style="opacity:.3"':''}></td>
+      <td style="font-weight:600;color:#333">${tTotal}</td>
+      <td style="font-weight:600;color:#333">${ocTotal}</td>
     </tr>`;
   }).join('');
 }
@@ -608,7 +630,6 @@ function generate(){
       if(dr.name===tDoc||dayState(dr.name,day)===1||isNgPair(tDoc,dr.name))return false;
       const rc=heavy?rem[dr.name].ocH:rem[dr.name].ocW;
       if(rc<=0)return false;
-      if(lastOncallDay[dr.name]===getPrevDay(day))return false;
       return true;
     });
 
@@ -640,7 +661,6 @@ function generate(){
     schedule[day].oncall=chosen.map(d=>d.name);
     chosen.forEach(d=>{
       if(heavy){ocH[d.name]++;rem[d.name].ocH--;}else{ocW[d.name]++;rem[d.name].ocW--;}
-      lastOncallDay[d.name]=day;
       if(isArr)arrhOncallCount[d.name]=(arrhOncallCount[d.name]||0)+1;
     });
     if(chosen.length<needed)warnings.push(`${day}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
