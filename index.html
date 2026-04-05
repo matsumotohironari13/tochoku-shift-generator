@@ -311,27 +311,33 @@ function computeMonthConfig(){
   updateSums();
 }
 
+function getVisitingHeavyDays(){
+  return doctors.filter(d=>d.role==='visiting').reduce((s,d)=>s+(monthConfig[d.name]?.tH||0),0);
+}
+
 function updateSums(){
   const days=getDays();if(!days.length)return;
   const{wdays,heavy}=getMonthDayCounts();
+  const visitingHeavy=getVisitingHeavyDays();
+  const needOcH=heavy+visitingHeavy;
   const sums={tW:0,tH:0,ocW:0,ocH:0};
   doctors.forEach(d=>{Object.keys(sums).forEach(k=>sums[k]+=(monthConfig[d.name]?.[k]||0))});
   const color=(s,n)=>s===n?'#166534':s>n?'#b91c1c':'#b45309';
-  Object.entries({tW:wdays,tH:heavy,ocW:wdays,ocH:heavy}).forEach(([k,need])=>{
+  const needMap={tW:wdays,tH:heavy,ocW:wdays,ocH:needOcH};
+  Object.entries(needMap).forEach(([k,need])=>{
     const el=document.getElementById('sum-'+k);
     if(el){el.textContent=sums[k];el.style.color=color(sums[k],need);}
     const nel=document.getElementById('need-'+k);
     if(nel)nel.textContent=need;
   });
-  // 当直計・oncall計
   const tTotal=sums.tW+sums.tH;
   const ocTotal=sums.ocW+sums.ocH;
-  const need=wdays+heavy;
-  const elT=document.getElementById('sum-tTotal');if(elT){elT.textContent=tTotal;elT.style.color=color(tTotal,need);}
-  const elO=document.getElementById('sum-ocTotal');if(elO){elO.textContent=ocTotal;elO.style.color=color(ocTotal,need);}
-  const elNT=document.getElementById('need-tTotal');if(elNT)elNT.textContent=need;
-  const elNO=document.getElementById('need-ocTotal');if(elNO)elNO.textContent=need;
-  // 個人別合計列を再描画
+  const needT=wdays+heavy;
+  const needOc=wdays+needOcH;
+  const elT=document.getElementById('sum-tTotal');if(elT){elT.textContent=tTotal;elT.style.color=color(tTotal,needT);}
+  const elO=document.getElementById('sum-ocTotal');if(elO){elO.textContent=ocTotal;elO.style.color=color(ocTotal,needOc);}
+  const elNT=document.getElementById('need-tTotal');if(elNT)elNT.textContent=needT;
+  const elNO=document.getElementById('need-ocTotal');if(elNO)elNO.textContent=needOc;
   renderConfig();
 }
 
@@ -366,7 +372,8 @@ function validateConfig(){
   const{wdays,heavy}=getMonthDayCounts();
   const sums={tW:0,tH:0,ocW:0,ocH:0};
   doctors.forEach(d=>{Object.keys(sums).forEach(k=>sums[k]+=(monthConfig[d.name]?.[k]||0))});
-  const needs={tW:wdays,tH:heavy,ocW:wdays,ocH:heavy};
+  const visitingHeavy=getVisitingHeavyDays();
+  const needs={tW:wdays,tH:heavy,ocW:wdays,ocH:heavy+visitingHeavy};
   const labels={tW:'平日当直',tH:'休日当直',ocW:'平日oncall',ocH:'休日oncall'};
   const diffs=Object.entries(needs).map(([k,need])=>{
     const diff=sums[k]-need;
