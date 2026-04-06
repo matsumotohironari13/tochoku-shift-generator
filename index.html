@@ -52,6 +52,13 @@ input[type=number]:focus{border-color:#555}
 .oc{font-size:9px;color:#2563eb;line-height:1.4}
 .day-we{background:#eff6ff}.day-arr{background:#fff5f0}.day-vis{background:#f5f0ff}.day-ch{background:#f0fff4}
 .shortage{background:#fee2e2!important}
+.cell-edit{cursor:pointer;border-radius:4px;padding:1px 3px;display:inline-block}
+.cell-edit:hover{background:rgba(0,0,0,.08);text-decoration:underline}
+.edit-dropdown{position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9999;min-width:120px;overflow:hidden}
+.edit-dropdown .dd-item{padding:8px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f0f0}
+.edit-dropdown .dd-item:last-child{border-bottom:none}
+.edit-dropdown .dd-item:hover{background:#f5f5f5}
+.edit-dropdown .dd-header{padding:6px 14px;font-size:10px;font-weight:600;color:#888;background:#f8f8f8;text-transform:uppercase;letter-spacing:.05em}
 .mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:1rem}
 .metric{background:#f8f8f8;border-radius:8px;padding:10px 12px;border:1px solid #eee}
 .metric .lbl{font-size:11px;color:#888;margin-bottom:3px}
@@ -526,6 +533,133 @@ function renderPreCheck(){
 
 function dayState(name,day){return(holidays[name]||{})[day]||0}
 
+// ---- インライン編集 ----
+let _currentDropdown=null;
+function closeDropdown(){if(_currentDropdown){_currentDropdown.remove();_currentDropdown=null;}}
+document.addEventListener('click',e=>{if(_currentDropdown&&!_currentDropdown.contains(e.target))closeDropdown();});
+
+function showDropdown(e,day,type,idx){
+  e.stopPropagation();
+  closeDropdown();
+  const arrhythmiaSet=new Set(doctors.filter(d=>d.role==='arrhythmia').map(d=>d.name));
+  const visitingSet=new Set(doctors.filter(d=>d.role==='visiting').map(d=>d.name));
+  const s=schedule[day];
+  const tDoc=s.tochoku;
+  const isVisiting=tDoc&&visitingSet.has(tDoc);
+  const isArr=tDoc&&arrhythmiaSet.has(tDoc);
+
+  let candidates=[];
+  if(type==='tochoku'){
+    candidates=doctors.filter(d=>d.canTochoku&&d.name!==s.oncall?.[0]&&d.name!==s.oncall?.[1]).map(d=>d.name);
+  } else {
+    // oncall候補：不整脈当直日・外勤当直日は虚血グループのみ
+    const pool=(isArr||isVisiting)
+      ?doctors.filter(d=>!arrhythmiaSet.has(d.name)&&d.canOncall)
+      :doctors.filter(d=>d.canOncall);
+    candidates=pool.filter(d=>d.name!==tDoc&&d.name!==s.oncall?.[idx===0?1:0]).map(d=>d.name);
+  }
+
+  const dd=document.createElement('div');
+  dd.className='edit-dropdown';
+  const header=document.createElement('div');
+  header.className='dd-header';
+  header.textContent=type==='tochoku'?'当直を変更':'oncallを変更';
+  dd.appendChild(header);
+
+  // 「なし」選択肢（oncallのみ）
+  if(type==='oncall'){
+    const noneItem=document.createElement('div');
+    noneItem.className='dd-item';
+    noneItem.textContent='— なし';
+    noneItem.style.color='#999';
+    noneItem.onclick=()=>{
+      s.oncall.splice(idx,1);
+      closeDropdown();
+      rerenderResult();
+    };
+    dd.appendChild(noneItem);
+  }
+
+  candidates.forEach(name=>{
+    const item=document.createElement('div');
+    item.className='dd-item';
+    const d=doctors.find(x=>x.name===name);
+    item.innerHTML=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d?.color||'#999'};margin-right:6px"></span>${name}`;
+    item.onclick=()=>{
+      if(type==='tochoku'){
+        s.tochoku=name;
+      } else {
+        s.oncall[idx]=name;
+      }
+      closeDropdown();
+      rerenderResult();
+    };
+    dd.appendChild(item);
+  });
+
+  document.body.appendChild(dd);
+  _currentDropdown=dd;
+  const rect=e.target.getBoundingClientRect();
+  const ddH=Math.min(candidates.length*36+40,280);
+  const top=rect.bottom+window.scrollY+4;
+  const left=Math.min(rect.left+window.scrollX,window.innerWidth-140);
+  dd.style.top=top+'px';
+  dd.style.left=left+'px';
+  if(rect.bottom+ddH>window.innerHeight){
+    dd.style.top=(rect.top+window.scrollY-ddH)+'px';
+  }
+}
+
+// oncallに新しい人を追加（外勤当直日用）
+function showAddOncall(e,day){
+  e.stopPropagation();
+  closeDropdown();
+  const arrhythmiaSet=new Set(doctors.filter(d=>d.role==='arrhythmia').map(d=>d.name));
+  const visitingSet=new Set(doctors.filter(d=>d.role==='visiting').map(d=>d.name));
+  const s=schedule[day];
+  const tDoc=s.tochoku;
+  const isArr=tDoc&&arrhythmiaSet.has(tDoc);
+  const isVisiting=tDoc&&visitingSet.has(tDoc);
+  const pool=(isArr||isVisiting)
+    ?doctors.filter(d=>!arrhythmiaSet.has(d.name)&&d.canOncall)
+    :doctors.filter(d=>d.canOncall);
+  const candidates=pool.filter(d=>d.name!==tDoc&&!s.oncall.includes(d.name)).map(d=>d.name);
+  const dd=document.createElement('div');
+  dd.className='edit-dropdown';
+  const header=document.createElement('div');header.className='dd-header';header.textContent='oncallを追加';
+  dd.appendChild(header);
+  candidates.forEach(name=>{
+    const item=document.createElement('div');item.className='dd-item';
+    const d=doctors.find(x=>x.name===name);
+    item.innerHTML=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d?.color||'#999'};margin-right:6px"></span>${name}`;
+    item.onclick=()=>{s.oncall.push(name);closeDropdown();rerenderResult();};
+    dd.appendChild(item);
+  });
+  document.body.appendChild(dd);
+  _currentDropdown=dd;
+  const rect=e.target.getBoundingClientRect();
+  dd.style.top=(rect.bottom+window.scrollY+4)+'px';
+  dd.style.left=Math.min(rect.left+window.scrollX,window.innerWidth-140)+'px';
+}
+
+function rerenderResult(){
+  const days=getDays();
+  const arrhythmiaSet=new Set(doctors.filter(d=>d.role==='arrhythmia').map(d=>d.name));
+  const visitingSet=new Set(doctors.filter(d=>d.role==='visiting').map(d=>d.name));
+  // 集計を再計算
+  const tW={},tH={},ocW={},ocH={};
+  doctors.forEach(d=>{tW[d.name]=0;tH[d.name]=0;ocW[d.name]=0;ocH[d.name]=0});
+  days.forEach(day=>{
+    const s=schedule[day];if(!s)return;
+    const heavy=isHeavy(day);
+    if(s.tochoku){heavy?tH[s.tochoku]++:tW[s.tochoku]++;}
+    (s.oncall||[]).forEach(n=>{heavy?ocH[n]++:ocW[n]++;});
+  });
+  Object.assign(_tW,tW);Object.assign(_tH,tH);Object.assign(_ocW,ocW);Object.assign(_ocH,ocH);
+  const warnings=[];
+  renderResult(days,tW,tH,ocW,ocH,warnings,arrhythmiaSet,visitingSet);
+}
+
 function generate(){
   const days=getDays();
   if(!days.length){alert('対象月を選択してください');return}
@@ -726,8 +860,8 @@ function renderResult(days,tW,tH,ocW,ocH,warnings,arrhythmiaSet,visitingSet){
       <div class="dn"><span style="font-size:12px;font-weight:700${numColor?`;color:${numColor}`:''}">${date.getDate()}</span>
         <span class="dtype ${heavy&&!cHol?'we':cHol?'ch':''}">${typeLabel}</span>
       </div>
-      <div class="dt">${s.tochoku||'—'}</div>
-      <div class="oc">${s.oncall.length?'📞'+s.oncall.join(' '):''}</div>
+      <div class="dt"><span class="cell-edit" onclick="showDropdown(event,'${day}','tochoku',0)" title="クリックして変更">${s.tochoku||'—'}</span></div>
+      <div class="oc">${s.oncall.map((n,i)=>`<span class="cell-edit" onclick="showDropdown(event,'${day}','oncall',${i})" title="クリックして変更">📞${n}</span>`).join(' ')}${s.oncall.length===0?`<span class="cell-edit" style="color:#bbb;font-size:9px" onclick="showAddOncall(event,'${day}')" title="oncallを追加">＋</span>`:isV?`<span class="cell-edit" style="color:#bbb;font-size:9px" onclick="showAddOncall(event,'${day}')" title="oncallを追加"> ＋</span>`:''}</div>
     </div>`;
   });
   html+='</div></div>';
