@@ -704,6 +704,7 @@ function generate(){
     for(const day of avHeavy){
       if(assigned>=(monthConfig[d.name]?.tH||0))break;
       if(dayState(d.name,day)||schedule[day].tochoku)continue;
+      if(schedule[getPrevDay(day)]?.tochoku===d.name)continue;
       schedule[day].tochoku=d.name;tH[d.name]++;rem[d.name].tH--;assigned++;
     }
     if(assigned<(monthConfig[d.name]?.tH||0))warnings.push(`${d.name}：休日当直${monthConfig[d.name]?.tH}回を確保できませんでした（${assigned}回）`);
