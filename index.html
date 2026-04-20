@@ -714,6 +714,17 @@ function generate(){
   schedule={};
   const warnings=[];
   const weekdays=days.filter(d=>!isHeavy(d));
+
+  // 直近3日以内に当直があればtrue（4日以上の間隔を保証）
+  function hasRecentTochoku(name, currentDay){
+    const cur=new Date(currentDay+'T00:00:00');
+    for(let i=1;i<=3;i++){
+      const d=new Date(cur);d.setDate(d.getDate()-i);
+      const ds=d.toISOString().slice(0,10);
+      if(schedule[ds]?.tochoku===name)return true;
+    }
+    return false;
+  }
   const heavyDays=days.filter(d=>isHeavy(d));
   days.forEach(d=>{schedule[d]={tochoku:null,oncall:[]}});
 
@@ -762,17 +773,6 @@ function generate(){
 
   // Step4: 虚血グループ当直（残り回数多い人優先）
   // 直近10日以内の当直回数チェック（2回以上なら除外）
-  // 直近3日以内に当直があればtrue（4日以上の間隔を保証）
-  function hasRecentTochoku(name, currentDay){
-    const cur=new Date(currentDay+'T00:00:00');
-    for(let i=1;i<=3;i++){
-      const d=new Date(cur);d.setDate(d.getDate()-i);
-      const ds=d.toISOString().slice(0,10);
-      if(schedule[ds]?.tochoku===name)return true;
-    }
-    return false;
-  }
-
   function tScore(d,heavy){
     if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return 9999;
     const rc=heavy?rem[d.name].tH:rem[d.name].tW;
