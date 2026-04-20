@@ -83,6 +83,10 @@ input[type=number]:focus{border-color:#555}
 .legend span{display:flex;align-items:center;gap:4px}
 .legend-sq{display:inline-block;width:10px;height:10px;border-radius:3px;flex-shrink:0}
 .section-title{font-size:13px;font-weight:600;margin-bottom:10px;color:#333}
+.cell-name{cursor:default;border-radius:3px;padding:1px 2px;transition:background .1s}
+.cal-day.highlighted{outline:2px solid #6366f1;outline-offset:-1px;background:#eef2ff!important;z-index:1;position:relative}
+.name-tag{display:inline-block;border-radius:3px;padding:0 2px;cursor:default}
+.name-tag.hoverable:hover{background:rgba(99,102,241,.15);}
 </style>
 </head>
 <body>
@@ -356,7 +360,7 @@ function renderConfig(){
     const tTotal=(cfg.tW||0)+(cfg.tH||0);
     const ocTotal=(cfg.ocW||0)+(cfg.ocH||0);
     return`<tr>
-      <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d.color};margin-right:5px"></span>${d.name}</td>
+      <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d.color};margin-right:5px"></span><span class="name-tag hoverable" onmouseenter="highlightDoctor('${d.name}')" onmouseleave="highlightDoctor(null)">${d.name}</span></td>
       <td><input type="number" min="0" max="15" value="${cfg.tW}" onchange="updateConfig('${d.name}','tW',this.value)" ${disT?'disabled style="opacity:.3"':''}></td>
       <td><input type="number" min="0" max="15" value="${cfg.tH}" onchange="updateConfig('${d.name}','tH',this.value)" ${disT?'disabled style="opacity:.3"':''}></td>
       <td><input type="number" min="0" max="15" value="${cfg.ocW}" onchange="updateConfig('${d.name}','ocW',this.value)" ${disO?'disabled style="opacity:.3"':''}></td>
@@ -536,6 +540,20 @@ function renderPreCheck(){
 }
 
 function dayState(name,day){return(holidays[name]||{})[day]||0}
+
+// ---- ホバーハイライト ----
+let _highlightName=null;
+function highlightDoctor(name){
+  _highlightName=name;
+  document.querySelectorAll('.cal-day').forEach(cell=>{
+    cell.classList.remove('highlighted');
+  });
+  if(!name)return;
+  document.querySelectorAll(`[data-doctor="${name}"]`).forEach(el=>{
+    const cell=el.closest('.cal-day');
+    if(cell)cell.classList.add('highlighted');
+  });
+}
 
 // ---- インライン編集 ----
 let _currentDropdown=null;
@@ -895,8 +913,8 @@ function renderResult(days,tW,tH,ocW,ocH,warnings,arrhythmiaSet,visitingSet){
       <div class="dn"><span style="font-size:12px;font-weight:700${numColor?`;color:${numColor}`:''}">${date.getDate()}</span>
         <span class="dtype ${heavy&&!cHol?'we':cHol?'ch':''}">${typeLabel}</span>
       </div>
-      <div class="dt"><span class="cell-edit" onclick="showDropdown(event,'${day}','tochoku',0)" title="クリックして変更">${s.tochoku||'—'}</span></div>
-      <div class="oc">${s.oncall.map((n,i)=>`<span class="cell-edit" onclick="showDropdown(event,'${day}','oncall',${i})" title="クリックして変更">📞${n}</span>`).join(' ')}${s.oncall.length===0?`<span class="cell-edit" style="color:#bbb;font-size:9px" onclick="showAddOncall(event,'${day}')" title="oncallを追加">＋</span>`:isV?`<span class="cell-edit" style="color:#bbb;font-size:9px" onclick="showAddOncall(event,'${day}')" title="oncallを追加"> ＋</span>`:''}</div>
+      <div class="dt"><span class="cell-edit" data-doctor="${s.tochoku||''}" onmouseenter="highlightDoctor('${s.tochoku||''}')" onmouseleave="highlightDoctor(null)" onclick="showDropdown(event,'${day}','tochoku',0)" title="クリックして変更">${s.tochoku||'—'}</span></div>
+      <div class="oc">${s.oncall.map((n,i)=>`<span class="cell-edit" data-doctor="${n}" onmouseenter="highlightDoctor('${n}')" onmouseleave="highlightDoctor(null)" onclick="showDropdown(event,'${day}','oncall',${i})" title="クリックして変更">📞${n}</span>`).join(' ')}${s.oncall.length===0?`<span class="cell-edit" style="color:#bbb;font-size:9px" onclick="showAddOncall(event,'${day}')" title="oncallを追加">＋</span>`:isV?`<span class="cell-edit" style="color:#bbb;font-size:9px" onclick="showAddOncall(event,'${day}')" title="oncallを追加"> ＋</span>`:''}</div>
     </div>`;
   });
   html+='</div></div>';
@@ -917,13 +935,48 @@ function renderResult(days,tW,tH,ocW,ocH,warnings,arrhythmiaSet,visitingSet){
       return `<td style="text-align:center"><span style="font-weight:600;color:${col}">${v}</span><span style="font-size:10px;color:#aaa">/${t}</span></td>`;
     };
     html+=`<tr>
-      <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d.color};margin-right:5px"></span>${d.name}</td>
+      <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d.color};margin-right:5px"></span><span class="name-tag hoverable" onmouseenter="highlightDoctor('${d.name}')" onmouseleave="highlightDoctor(null)">${d.name}</span></td>
       ${cell(tw,cfg.tW)}${cell(th,cfg.tH)}
       <td style="text-align:center;background:#f8f8f8"><span style="font-weight:700;color:${tc===cfgTc?'#166534':tc<cfgTc?'#b45309':'#b91c1c'}">${tc}</span><span style="font-size:10px;color:#aaa">/${cfgTc}</span></td>
       ${cell(ow,cfg.ocW)}${cell(oh,cfg.ocH)}
       <td style="text-align:center;background:#f8f8f8"><span style="font-weight:700;color:${oc===cfgOc?'#166534':oc<cfgOc?'#b45309':'#b91c1c'}">${oc}</span><span style="font-size:10px;color:#aaa">/${cfgOc}</span></td>
     </tr>`;
   });
+  // 合計行・必要数行
+  const sumTW=doctors.reduce((s,d)=>s+(tW[d.name]||0),0);
+  const sumTH=doctors.reduce((s,d)=>s+(tH[d.name]||0),0);
+  const sumOcW=doctors.reduce((s,d)=>s+(ocW[d.name]||0),0);
+  const sumOcH=doctors.reduce((s,d)=>s+(ocH[d.name]||0),0);
+  const sumTC=sumTW+sumTH, sumOcC=sumOcW+sumOcH;
+  const cfgSumTW=doctors.reduce((s,d)=>s+(monthConfig[d.name]?.tW||0),0);
+  const cfgSumTH=doctors.reduce((s,d)=>s+(monthConfig[d.name]?.tH||0),0);
+  const cfgSumOcW=doctors.reduce((s,d)=>s+(monthConfig[d.name]?.ocW||0),0);
+  const cfgSumOcH=doctors.reduce((s,d)=>s+(monthConfig[d.name]?.ocH||0),0);
+  const cfgSumTC=cfgSumTW+cfgSumTH, cfgSumOcC=cfgSumOcW+cfgSumOcH;
+  const {wdays,heavy}=getMonthDayCounts();
+  const visitingHeavy2=getVisitingHeavyDays();
+  const needOcH2=heavy+visitingHeavy2;
+  const sc=(v,t)=>`<span style="font-weight:700;color:${v===t?'#166534':v<t?'#b45309':'#b91c1c'}">${v}</span><span style="font-size:10px;color:#aaa">/${t}</span>`;
+  html+=`<tfoot>
+    <tr style="border-top:2px solid #eee;background:#f8f8f8">
+      <td class="name" style="font-weight:600;padding:6px 5px">実績合計</td>
+      <td style="text-align:center">${sc(sumTW,cfgSumTW)}</td>
+      <td style="text-align:center">${sc(sumTH,cfgSumTH)}</td>
+      <td style="text-align:center;background:#f0f0f0"><span style="font-weight:700;color:${sumTC===cfgSumTC?'#166534':sumTC<cfgSumTC?'#b45309':'#b91c1c'}">${sumTC}</span><span style="font-size:10px;color:#aaa">/${cfgSumTC}</span></td>
+      <td style="text-align:center">${sc(sumOcW,cfgSumOcW)}</td>
+      <td style="text-align:center">${sc(sumOcH,cfgSumOcH)}</td>
+      <td style="text-align:center;background:#f0f0f0"><span style="font-weight:700;color:${sumOcC===cfgSumOcC?'#166534':sumOcC<cfgSumOcC?'#b45309':'#b91c1c'}">${sumOcC}</span><span style="font-size:10px;color:#aaa">/${cfgSumOcC}</span></td>
+    </tr>
+    <tr style="color:#888">
+      <td class="name" style="font-size:11px;padding:4px 5px">必要数</td>
+      <td style="text-align:center;font-size:11px">${wdays}</td>
+      <td style="text-align:center;font-size:11px">${heavy}</td>
+      <td style="text-align:center;font-size:11px;background:#f8f8f8">${wdays+heavy}</td>
+      <td style="text-align:center;font-size:11px">${wdays}</td>
+      <td style="text-align:center;font-size:11px">${needOcH2}</td>
+      <td style="text-align:center;font-size:11px;background:#f8f8f8">${wdays+needOcH2}</td>
+    </tr>
+  </tfoot>`;
   html+=`</tbody></table></div>
   <p style="font-size:11px;color:#999;margin-top:8px">緑=設定通り　黄=不足　赤=超過</p></div>`;
 
