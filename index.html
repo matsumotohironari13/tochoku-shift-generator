@@ -953,7 +953,6 @@ function renderResult(days,tW,tH,ocW,ocH,warnings,arrhythmiaSet,visitingSet){
   const cfgSumOcW=doctors.reduce((s,d)=>s+(monthConfig[d.name]?.ocW||0),0);
   const cfgSumOcH=doctors.reduce((s,d)=>s+(monthConfig[d.name]?.ocH||0),0);
   const cfgSumTC=cfgSumTW+cfgSumTH, cfgSumOcC=cfgSumOcW+cfgSumOcH;
-  const {wdays,heavy}=getMonthDayCounts();
   const visitingHeavy2=getVisitingHeavyDays();
   const needOcH2=heavy+visitingHeavy2;
   const sc=(v,t)=>`<span style="font-weight:700;color:${v===t?'#166534':v<t?'#b45309':'#b91c1c'}">${v}</span><span style="font-size:10px;color:#aaa">/${t}</span>`;
