@@ -715,10 +715,10 @@ function generate(){
   const warnings=[];
   const weekdays=days.filter(d=>!isHeavy(d));
 
-  // 直近3日以内に当直があればtrue（4日以上の間隔を保証）
+  // 直近4日以内に当直があればtrue（中3日=5日以上空ける）
   function hasRecentTochoku(name, currentDay){
     const cur=new Date(currentDay+'T00:00:00');
-    for(let i=1;i<=3;i++){
+    for(let i=1;i<=4;i++){
       const d=new Date(cur);d.setDate(d.getDate()-i);
       const ds=d.toISOString().slice(0,10);
       if(schedule[ds]?.tochoku===name)return true;
@@ -789,10 +789,17 @@ function generate(){
       if(hasRecentTochoku(d.name,day))return false;
       return true;
     });
-    let preferred=isSunday(day)?avail.filter(d=>prevOncall.includes(d.name)):[];
-    const rest=avail.filter(d=>!preferred.includes(d));
-    [...preferred,...rest].sort((a,b)=>{const ap=preferred.includes(a)?-5:0,bp=preferred.includes(b)?-5:0;return tScore(a,true)+ap-(tScore(b,true)+bp);});
-    const sorted=[...preferred,...rest];sorted.sort((a,b)=>{const ap=preferred.includes(a)?-5:0,bp=preferred.includes(b)?-5:0;return tScore(a,true)+ap-(tScore(b,true)+bp);});
+    // 間隔ルール緩和（候補ゼロ時のみ）
+    const availRelaxH=avail.length?avail:doctors.filter(d=>{
+      if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return false;
+      if(rem[d.name].tH<=0||dayState(d.name,day)||prevTochoku===d.name)return false;
+      return true;
+    });
+    if(!avail.length&&availRelaxH.length)warnings.push(`${day}：間隔ルールを緩和して割り当てました`);
+    let preferred=isSunday(day)?availRelaxH.filter(d=>prevOncall.includes(d.name)):[];
+    const rest=availRelaxH.filter(d=>!preferred.includes(d));
+    const sorted=[...preferred,...rest];
+    sorted.sort((a,b)=>{const ap=preferred.includes(a)?-5:0,bp=preferred.includes(b)?-5:0;return tScore(a,true)+ap-(tScore(b,true)+bp);});
     if(sorted.length){const ch=sorted[0];schedule[day].tochoku=ch.name;tH[ch.name]++;rem[ch.name].tH--;}
     else warnings.push(`${day}：当直担当を割り当てられませんでした`);
   });
@@ -805,8 +812,15 @@ function generate(){
       if(hasRecentTochoku(d.name,day))return false;
       return true;
     });
-    avail.sort((a,b)=>tScore(a,false)-tScore(b,false));
-    if(avail.length){const ch=avail[0];schedule[day].tochoku=ch.name;tW[ch.name]++;rem[ch.name].tW--;}
+    // 間隔ルール緩和（候補ゼロ時のみ）
+    const availRelaxW=avail.length?avail:doctors.filter(d=>{
+      if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return false;
+      if(rem[d.name].tW<=0||dayState(d.name,day)||prevTochoku===d.name)return false;
+      return true;
+    });
+    if(!avail.length&&availRelaxW.length)warnings.push(`${day}：間隔ルールを緩和して割り当てました`);
+    availRelaxW.sort((a,b)=>tScore(a,false)-tScore(b,false));
+    if(availRelaxW.length){const ch=availRelaxW[0];schedule[day].tochoku=ch.name;tW[ch.name]++;rem[ch.name].tW--;}
     else warnings.push(`${day}：当直担当を割り当てられませんでした`);
   });
 
