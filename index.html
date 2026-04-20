@@ -403,7 +403,11 @@ function switchTab(t){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
   if(t==='monthly'){renderHolType();renderVisitingWeek();updateMonthInfoBoxes();}
-  if(t==='config'){computeMonthConfig();updateMonthInfoBoxes();}
+  if(t==='config'){
+    if(Object.keys(monthConfig).length===0)computeMonthConfig();
+    else{renderConfig();updateSums();}
+    updateMonthInfoBoxes();
+  }
   if(t==='holidays')renderHolidays();
   if(t==='generate')renderPreCheck();
 }
@@ -603,10 +607,18 @@ function showDropdown(e,day,type,idx){
   const ddH=Math.min(candidates.length*36+40,280);
   const top=rect.bottom+window.scrollY+4;
   const left=Math.min(rect.left+window.scrollX,window.innerWidth-140);
-  dd.style.top=top+'px';
-  dd.style.left=left+'px';
-  if(rect.bottom+ddH>window.innerHeight){
-    dd.style.top=(rect.top+window.scrollY-ddH)+'px';
+  // 画面内に収まるよう調整
+  const maxH=Math.min(280, window.innerHeight-80);
+  dd.style.maxHeight=maxH+'px';
+  dd.style.overflowY='auto';
+  const leftPos=Math.max(4, Math.min(rect.left+window.scrollX, window.innerWidth-160));
+  dd.style.left=leftPos+'px';
+  if(rect.bottom+40>window.innerHeight*0.6){
+    dd.style.bottom=(window.innerHeight-rect.top-window.scrollY+4)+'px';
+    dd.style.top='auto';
+  } else {
+    dd.style.top=(rect.bottom+window.scrollY+4)+'px';
+    dd.style.bottom='auto';
   }
 }
 
@@ -638,8 +650,14 @@ function showAddOncall(e,day){
   document.body.appendChild(dd);
   _currentDropdown=dd;
   const rect=e.target.getBoundingClientRect();
-  dd.style.top=(rect.bottom+window.scrollY+4)+'px';
-  dd.style.left=Math.min(rect.left+window.scrollX,window.innerWidth-140)+'px';
+  dd.style.maxHeight='240px';dd.style.overflowY='auto';
+  const leftPos2=Math.max(4,Math.min(rect.left+window.scrollX,window.innerWidth-160));
+  dd.style.left=leftPos2+'px';
+  if(rect.bottom+40>window.innerHeight*0.6){
+    dd.style.bottom=(window.innerHeight-rect.top-window.scrollY+4)+'px';dd.style.top='auto';
+  } else {
+    dd.style.top=(rect.bottom+window.scrollY+4)+'px';dd.style.bottom='auto';
+  }
 }
 
 function rerenderResult(){
@@ -705,6 +723,7 @@ function generate(){
       if(assigned>=(monthConfig[d.name]?.tH||0))break;
       if(dayState(d.name,day)||schedule[day].tochoku)continue;
       if(schedule[getPrevDay(day)]?.tochoku===d.name)continue;
+      if(recentTochokuCount(d.name,day)>=2)continue;
       schedule[day].tochoku=d.name;tH[d.name]++;rem[d.name].tH--;assigned++;
     }
     if(assigned<(monthConfig[d.name]?.tH||0))warnings.push(`${d.name}：休日当直${monthConfig[d.name]?.tH}回を確保できませんでした（${assigned}回）`);
@@ -717,12 +736,25 @@ function generate(){
       if(assigned>=(monthConfig[d.name]?.tW||0))break;
       if(schedule[day].tochoku||dayState(d.name,day))continue;
       if(schedule[getPrevDay(day)]?.tochoku===d.name)continue;
+      if(recentTochokuCount(d.name,day)>=2)continue;
       schedule[day].tochoku=d.name;tW[d.name]++;rem[d.name].tW--;assigned++;
     }
     if(assigned<(monthConfig[d.name]?.tW||0))warnings.push(`${d.name}：平日当直${monthConfig[d.name]?.tW}回を確保できませんでした（${assigned}回）`);
   });
 
   // Step4: 虚血グループ当直（残り回数多い人優先）
+  // 直近10日以内の当直回数チェック（2回以上なら除外）
+  function recentTochokuCount(name, currentDay){
+    let count=0;
+    const cur=new Date(currentDay+'T00:00:00');
+    for(let i=1;i<=10;i++){
+      const d=new Date(cur);d.setDate(d.getDate()-i);
+      const ds=d.toISOString().slice(0,10);
+      if(schedule[ds]?.tochoku===name)count++;
+    }
+    return count;
+  }
+
   function tScore(d,heavy){
     if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return 9999;
     const rc=heavy?rem[d.name].tH:rem[d.name].tW;
@@ -736,6 +768,7 @@ function generate(){
     const avail=doctors.filter(d=>{
       if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return false;
       if(rem[d.name].tH<=0||dayState(d.name,day)||prevTochoku===d.name)return false;
+      if(recentTochokuCount(d.name,day)>=2)return false;
       return true;
     });
     let preferred=isSunday(day)?avail.filter(d=>prevOncall.includes(d.name)):[];
@@ -751,6 +784,7 @@ function generate(){
     const avail=doctors.filter(d=>{
       if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return false;
       if(rem[d.name].tW<=0||dayState(d.name,day)||prevTochoku===d.name)return false;
+      if(recentTochokuCount(d.name,day)>=2)return false;
       return true;
     });
     avail.sort((a,b)=>tScore(a,false)-tScore(b,false));
@@ -869,27 +903,29 @@ function renderResult(days,tW,tH,ocW,ocH,warnings,arrhythmiaSet,visitingSet){
 
   // 集計表（合計列追加）
   html+=`<div class="card"><p class="stitle" style="margin-bottom:8px">個人別集計</p>
-  <div style="overflow-x:auto"><table class="rtable"><thead><tr>
-    <th>医師</th><th>平日当直</th><th>休日当直</th><th>当直計</th><th>平日oncall</th><th>休日oncall</th><th>oncall計</th>
+  <div style="overflow-x:auto"><table class="cfg-table"><thead><tr>
+    <th class="left">医師</th><th>平日<br>当直</th><th>休日<br>当直</th><th>当直計</th><th>平日<br>oncall</th><th>休日<br>oncall</th><th>oncall計</th>
   </tr></thead><tbody>`;
   doctors.forEach(d=>{
     const cfg=monthConfig[d.name]||{tW:0,tH:0,ocW:0,ocH:0};
     const tw=tW[d.name]||0,th=tH[d.name]||0,ow=ocW[d.name]||0,oh=ocH[d.name]||0;
     const tc=tw+th,oc=ow+oh;
     const cfgTc=(cfg.tW||0)+(cfg.tH||0),cfgOc=(cfg.ocW||0)+(cfg.ocH||0);
-    const st=(v,t)=>v===t?'':v<t?'color:#b45309;font-weight:500':'color:#b91c1c;font-weight:500';
+    const cell=(v,t)=>{
+      const col=v===t?'#166534':v<t?'#b45309':'#b91c1c';
+      const bg=v===t?'':'';
+      return `<td style="text-align:center"><span style="font-weight:600;color:${col}">${v}</span><span style="font-size:10px;color:#aaa">/${t}</span></td>`;
+    };
     html+=`<tr>
-      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${d.color};margin-right:5px"></span>${d.name}</td>
-      <td style="${st(tw,cfg.tW)}">${tw}<span style="font-size:10px;color:#999;margin-left:3px">/${cfg.tW}</span></td>
-      <td style="${st(th,cfg.tH)}">${th}<span style="font-size:10px;color:#999;margin-left:3px">/${cfg.tH}</span></td>
-      <td style="font-weight:500;${st(tc,cfgTc)}">${tc}<span style="font-size:10px;color:#999;margin-left:2px">/${cfgTc}</span></td>
-      <td style="${st(ow,cfg.ocW)}">${ow}<span style="font-size:10px;color:#999;margin-left:3px">/${cfg.ocW}</span></td>
-      <td style="${st(oh,cfg.ocH)}">${oh}<span style="font-size:10px;color:#999;margin-left:3px">/${cfg.ocH}</span></td>
-      <td style="font-weight:500;${st(oc,cfgOc)}">${oc}<span style="font-size:10px;color:#999;margin-left:2px">/${cfgOc}</span></td>
+      <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d.color};margin-right:5px"></span>${d.name}</td>
+      ${cell(tw,cfg.tW)}${cell(th,cfg.tH)}
+      <td style="text-align:center;background:#f8f8f8"><span style="font-weight:700;color:${tc===cfgTc?'#166534':tc<cfgTc?'#b45309':'#b91c1c'}">${tc}</span><span style="font-size:10px;color:#aaa">/${cfgTc}</span></td>
+      ${cell(ow,cfg.ocW)}${cell(oh,cfg.ocH)}
+      <td style="text-align:center;background:#f8f8f8"><span style="font-weight:700;color:${oc===cfgOc?'#166534':oc<cfgOc?'#b45309':'#b91c1c'}">${oc}</span><span style="font-size:10px;color:#aaa">/${cfgOc}</span></td>
     </tr>`;
   });
   html+=`</tbody></table></div>
-  <p style="font-size:11px;color:#999;margin-top:8px">実績/設定値。黄=不足・赤=超過</p></div>`;
+  <p style="font-size:11px;color:#999;margin-top:8px">緑=設定通り　黄=不足　赤=超過</p></div>`;
 
   html+=`<button class="btn primary" style="width:100%;height:42px;margin-bottom:8px" onclick="exportCSV()">Excelダウンロード（CSV）↓</button>`;
   html+=`<button class="btn" style="width:100%;height:36px" onclick="generate()">再生成</button>`;
