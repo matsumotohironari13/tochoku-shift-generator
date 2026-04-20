@@ -744,18 +744,41 @@ function generate(){
   });
 
   // Step2: 不整脈グループ休日当直確保
+  // 各医師が入れる休日をリストアップし、月全体に均等分散して割り当て
   const arrhDrs=doctors.filter(d=>d.role==='arrhythmia'&&d.canTochoku);
   const avHeavy=heavyDays.filter(d=>!schedule[d].tochoku);
   arrhDrs.forEach(d=>{
+    const target=monthConfig[d.name]?.tH||0;
+    if(target===0)return;
+    // この医師が入れる休日候補をリストアップ
+    const candidates=avHeavy.filter(day=>{
+      if(dayState(d.name,day)||schedule[day].tochoku)return false;
+      if(schedule[getPrevDay(day)]?.tochoku===d.name)return false;
+      if(hasRecentTochoku(d.name,day))return false;
+      return true;
+    });
+    // 月全体に均等分散：候補を等間隔で選ぶ
     let assigned=0;
-    for(const day of avHeavy){
-      if(assigned>=(monthConfig[d.name]?.tH||0))break;
-      if(dayState(d.name,day)||schedule[day].tochoku)continue;
-      if(schedule[getPrevDay(day)]?.tochoku===d.name)continue;
-      if(hasRecentTochoku(d.name,day))continue;
-      schedule[day].tochoku=d.name;tH[d.name]++;rem[d.name].tH--;assigned++;
+    if(candidates.length>0){
+      // 候補の中からなるべく均等間隔になるようtarget個を選ぶ
+      const step=Math.max(1,Math.floor(candidates.length/target));
+      for(let i=0;i<candidates.length&&assigned<target;i+=step){
+        const day=candidates[i];
+        if(schedule[day].tochoku)continue; // 他の医師が既に入った場合スキップ
+        schedule[day].tochoku=d.name;tH[d.name]++;rem[d.name].tH--;assigned++;
+      }
+      // 不足分は残りの候補から補完
+      if(assigned<target){
+        for(const day of candidates){
+          if(assigned>=target)break;
+          if(schedule[day].tochoku)continue;
+          schedule[day].tochoku=d.name;tH[d.name]++;rem[d.name].tH--;assigned++;
+        }
+      }
     }
-    if(assigned<(monthConfig[d.name]?.tH||0))warnings.push(`${d.name}：休日当直${monthConfig[d.name]?.tH}回を確保できませんでした（${assigned}回）`);
+    let assigned_final=assigned;
+    {const assigned=assigned_final;
+    if(assigned<(monthConfig[d.name]?.tH||0))warnings.push(`${d.name}：休日当直${monthConfig[d.name]?.tH}回を確保できませんでした（${assigned}回）`);}
   });
 
   // Step3: 不整脈グループ平日当直確保
