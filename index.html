@@ -708,7 +708,6 @@ function generate(){
   const tW={},tH={},ocW={},ocH={};
   doctors.forEach(d=>{tW[d.name]=0;tH[d.name]=0;ocW[d.name]=0;ocH[d.name]=0});
 
-  // 残り割り当て可能回数
   const rem={};
   doctors.forEach(d=>{rem[d.name]={
     tW:monthConfig[d.name]?.tW||0,
@@ -724,7 +723,7 @@ function generate(){
   const weekdays=days.filter(d=>!isHeavy(d));
   const heavyDays=days.filter(d=>isHeavy(d));
 
-  // 直近4日以内に当直があればtrue（中3日=5日以上空ける）
+  // ルール1（最優先）: 中3日ルール - 直近4日以内に当直があればNG・緩和なし
   function hasRecentTochoku(name, currentDay){
     const cur=new Date(currentDay+'T00:00:00');
     for(let i=1;i<=4;i++){
@@ -735,8 +734,47 @@ function generate(){
     return false;
   }
 
+  // 当直可能チェック（全ルール適用）
+  function canAssignTochoku(d, day, heavy){
+    if(!d.canTochoku)return false;
+    if(visitingSet.has(d.name))return false;
+    if(dayState(d.name,day)>=1)return false;                          // 希望休
+    if(schedule[day].tochoku)return false;                             // 既に割り当て済み
+    if(schedule[getPrevDay(day)]?.tochoku===d.name)return false;       // 連日禁止
+    if(hasRecentTochoku(d.name,day))return false;                      // 中3日ルール（緩和なし）
+    if(heavy&&rem[d.name].tH<=0)return false;                         // 設定回数上限
+    if(!heavy&&rem[d.name].tW<=0)return false;
+    return true;
+  }
+
+  // oncall可能チェック
+  function canAssignOncall(dr, day, tDoc, heavy, isArr){
+    if(!dr.canOncall)return false;
+    if(dr.name===tDoc)return false;
+    if(dayState(dr.name,day)===1)return false;
+    if(isNgPair(tDoc,dr.name))return false;
+    if(heavy&&rem[dr.name].ocH<=0)return false;
+    if(!heavy&&rem[dr.name].ocW<=0)return false;
+    return true;
+  }
+
+  // スコア：残り回数が多い人優先（tBias/ocBiasで傾斜）
+  function tScore(d, heavy){
+    const rc=heavy?rem[d.name].tH:rem[d.name].tW;
+    return -rc*10+d.tBias*0.3+(Math.random()-0.5)*0.3;
+  }
+
+  const arrhOncallCount={};
+  ischemicOncallPool.forEach(d=>{arrhOncallCount[d.name]=0});
+
+  function ocScore(d, heavy, isArr){
+    const rc=heavy?rem[d.name].ocH:rem[d.name].ocW;
+    if(isArr)return arrhOncallCount[d.name]*10+d.ocBias*0.2+(Math.random()-0.5)*0.2;
+    return -rc*10+d.ocBias*0.3+(Math.random()-0.5)*0.3;
+  }
+
   // =============================================
-  // PHASE 1: 休日当直を月全体にバランスよく配置
+  // PHASE 1: 休日当直をバランスよく配置（最優先）
   // =============================================
 
   // Step1a: 外勤（八田）の土日2連続を先に確保
@@ -750,135 +788,99 @@ function generate(){
     if(tgt.length<2)warnings.push(`${vd.name}：土日2連続確保できませんでした`);
   });
 
-  // Step1b: 残りの休日を全医師でバランスよく割り当てるため
-  // 「誰がどの休日に入るか」を事前に一括決定する
-  // 不整脈グループを月全体に均等配置してから虚血グループで残りを埋める
-
-  // 利用可能な休日リスト（外勤済み除く）
-  const freeHeavy=heavyDays.filter(d=>!schedule[d].tochoku);
-
-  // 不整脈グループ：月全体に均等配置
-  // 各医師の「入れる休日」を求め、月の位置が均等になるよう選ぶ
+  // Step1b: 不整脈グループを月全体に均等配置
+  // 各医師の入れる休日を求め、月を等分割して選ぶ
   const arrhDrs=doctors.filter(d=>d.role==='arrhythmia'&&d.canTochoku);
-
-  // 全不整脈医師をまとめて処理：月全体の休日を等分割して担当日を決める
-  // 不整脈グループ全体で必要な休日数
-  const arrhHeavyNeeded=arrhDrs.reduce((s,d)=>s+(rem[d.name].tH||0),0);
-
-  // 不整脈医師ごとに「使える休日リスト」を作成
-  const arrhCandidates={};
-  arrhDrs.forEach(d=>{
-    arrhCandidates[d.name]=freeHeavy.filter(day=>
-      !dayState(d.name,day)&&!schedule[day].tochoku
-    );
-  });
-
-  // 月全体の休日インデックスを使って均等分散
-  // 全不整脈医師の担当日を一括で決定（ラウンドロビン方式）
-  // まず月全体の位置でソートされた候補を医師ごとに用意
-  // 月の前半・後半にバランスよく入れるため、freeHeavyをn等分して各医師に割り当て
-  const assignedHeavyDays=new Set();
+  const assignedHeavySet=new Set(heavyDays.filter(d=>schedule[d].tochoku));
 
   arrhDrs.forEach(d=>{
     const needed=rem[d.name].tH||0;
     if(needed===0)return;
-    // この医師が入れる休日（まだ誰も入っていない日）
-    const cands=freeHeavy.filter(day=>
-      !dayState(d.name,day)&&!assignedHeavyDays.has(day)
-    );
+
+    // この医師が入れる休日候補（中3日・希望休・連日禁止を全て適用）
+    const cands=heavyDays.filter(day=>{
+      if(assignedHeavySet.has(day))return false;
+      if(!canAssignTochoku(d,day,true))return false;
+      return true;
+    });
+
     if(!cands.length){
-      warnings.push(`${d.name}：休日当直を確保できませんでした`);
+      warnings.push(`${d.name}：休日当直を確保できませんでした（中3日ルール等により候補なし）`);
       return;
     }
-    // 月全体に均等配置：候補をneeded等分してその中間付近の日を選ぶ
+
+    // 月全体をneeded等分して各セグメントから1日選ぶ
     const selected=[];
     const segSize=cands.length/needed;
     for(let i=0;i<needed;i++){
       const segStart=Math.floor(i*segSize);
       const segEnd=Math.min(Math.floor((i+1)*segSize),cands.length)-1;
-      // セグメント内でこの医師が入れる日を選ぶ（連続禁止チェック）
       let found=false;
       for(let j=segStart;j<=segEnd;j++){
         const day=cands[j];
-        if(assignedHeavyDays.has(day))continue;
-        if(dayState(d.name,day))continue;
-        // 前後の連続チェック（暫定割り当てを考慮）
-        const prevD=getPrevDay(day);
-        if(selected.includes(prevD))continue;
+        if(assignedHeavySet.has(day))continue;
+        // 暫定割り当て済みの日との中3日チェック
+        let conflict=false;
+        for(const sel of selected){
+          const d1=new Date(sel+'T00:00:00'),d2=new Date(day+'T00:00:00');
+          if(Math.abs(d1-d2)/(1000*60*60*24)<=4){conflict=true;break;}
+        }
+        if(conflict)continue;
         selected.push(day);
-        assignedHeavyDays.add(day);
+        assignedHeavySet.add(day);
         found=true;
         break;
       }
       if(!found){
-        // セグメント内で見つからない場合は残り候補から探す
+        // セグメント内になければ残り候補から探す
         for(const day of cands){
-          if(assignedHeavyDays.has(day))continue;
-          if(dayState(d.name,day))continue;
-          const prevD=getPrevDay(day);
-          if(selected.includes(prevD))continue;
+          if(assignedHeavySet.has(day))continue;
+          let conflict=false;
+          for(const sel of selected){
+            const d1=new Date(sel+'T00:00:00'),d2=new Date(day+'T00:00:00');
+            if(Math.abs(d1-d2)/(1000*60*60*24)<=4){conflict=true;break;}
+          }
+          if(conflict)continue;
           selected.push(day);
-          assignedHeavyDays.add(day);
+          assignedHeavySet.add(day);
           break;
         }
       }
     }
-    // 選んだ日を割り当て
+
     selected.forEach(day=>{
       schedule[day].tochoku=d.name;tH[d.name]++;rem[d.name].tH--;
     });
     if(selected.length<needed)
-      warnings.push(`${d.name}：休日当直${needed}回を確保できませんでした（${selected.length}回）`);
+      warnings.push(`${d.name}：休日当直${needed}回を確保できませんでした（${selected.length}回・中3日ルール適用）`);
   });
 
   // Step1c: 残りの休日を虚血グループで埋める
-  // tScoreで残り回数が多い人優先
-  function tScore(d,heavy){
-    if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return 9999;
-    const rc=heavy?rem[d.name].tH:rem[d.name].tW;
-    if(rc<=0)return 9999;
-    return -rc*10+d.tBias*0.3+(Math.random()-0.5)*0.3;
-  }
-
   heavyDays.filter(d=>!schedule[d].tochoku).forEach(day=>{
     const prevOncall=schedule[getPrevDay(day)]?.oncall||[];
-    const prevTochoku=schedule[getPrevDay(day)]?.tochoku;
     const avail=doctors.filter(d=>{
-      if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return false;
-      if(rem[d.name].tH<=0||dayState(d.name,day)||prevTochoku===d.name)return false;
-      if(hasRecentTochoku(d.name,day))return false;
-      return true;
+      if(d.role==='arrhythmia'||visitingSet.has(d.name))return false;
+      return canAssignTochoku(d,day,true);
     });
-    // 間隔ルール緩和（候補ゼロ時のみ）
-    const pool=avail.length?avail:doctors.filter(d=>{
-      if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return false;
-      if(rem[d.name].tH<=0||dayState(d.name,day)||prevTochoku===d.name)return false;
-      return true;
-    });
-    if(!avail.length&&pool.length)warnings.push(`${day}：間隔ルールを緩和して割り当てました`);
-    const prevOncall=schedule[getPrevDay(day)]?.oncall||[];
-    let preferred=isSunday(day)?pool.filter(d=>prevOncall.includes(d.name)):[];
-    const rest=pool.filter(d=>!preferred.includes(d));
+    if(!avail.length){
+      warnings.push(`${day}：休日当直の候補者なし（中3日ルール・希望休等）`);
+      return;
+    }
+    // セット優先（土曜oncall→日曜当直）
+    let preferred=isSunday(day)?avail.filter(d=>prevOncall.includes(d.name)):[];
+    const rest=avail.filter(d=>!preferred.includes(d));
     const sorted=[...preferred,...rest];
-    sorted.sort((a,b)=>{const ap=preferred.includes(a)?-5:0,bp=preferred.includes(b)?-5:0;return tScore(a,true)+ap-(tScore(b,true)+bp);});
-    if(sorted.length){const ch=sorted[0];schedule[day].tochoku=ch.name;tH[ch.name]++;rem[ch.name].tH--;}
-    else warnings.push(`${day}：当直担当を割り当てられませんでした`);
+    sorted.sort((a,b)=>{
+      const ap=preferred.includes(a)?-5:0,bp=preferred.includes(b)?-5:0;
+      return tScore(a,true)+ap-(tScore(b,true)+bp);
+    });
+    const ch=sorted[0];
+    schedule[day].tochoku=ch.name;tH[ch.name]++;rem[ch.name].tH--;
   });
 
   // =============================================
-  // PHASE 2: 休日oncallを決める（休日当直確定後）
+  // PHASE 2: 休日oncallをバランスよく配置
   // =============================================
-  const arrhOncallCount={};
-  ischemicOncallPool.forEach(d=>{arrhOncallCount[d.name]=0});
-
-  function ocScore(d,heavy,isArr){
-    if(!d.canOncall)return 9999;
-    const rc=heavy?rem[d.name].ocH:rem[d.name].ocW;
-    if(rc<=0)return 9999;
-    if(isArr)return arrhOncallCount[d.name]*10+d.ocBias*0.2+(Math.random()-0.5)*0.2;
-    return -rc*10+d.ocBias*0.3+(Math.random()-0.5)*0.3;
-  }
-
   heavyDays.forEach(day=>{
     const tDoc=schedule[day].tochoku;if(!tDoc)return;
     const isVisiting=visitingSet.has(tDoc);
@@ -887,24 +889,22 @@ function generate(){
     const prevTochoku=schedule[getPrevDay(day)]?.tochoku;
     const pool=(isArr||isVisiting)?ischemicOncallPool:doctors.filter(d=>d.canOncall);
 
-    const avail=pool.filter(dr=>{
-      if(dr.name===tDoc||dayState(dr.name,day)===1||isNgPair(tDoc,dr.name))return false;
-      if(rem[dr.name].ocH<=0)return false;
-      return true;
-    });
+    const avail=pool.filter(dr=>canAssignOncall(dr,day,tDoc,true,isArr));
 
+    // セット優先（土曜当直→日曜oncall）
     let preferred=[];
-    if(isSunday(day)&&prevTochoku)preferred=avail.filter(dr=>dr.name===prevTochoku);
+    if(isSunday(day)&&prevTochoku)
+      preferred=avail.filter(dr=>dr.name===prevTochoku);
     const rest=avail.filter(dr=>!preferred.includes(dr));
     const sorted=[...preferred,...rest];
-    sorted.sort((a,b)=>{const ap=preferred.includes(a)?-5:0,bp=preferred.includes(b)?-5:0;return ocScore(a,true,isArr)+ap-(ocScore(b,true,isArr)+bp);});
+    sorted.sort((a,b)=>{
+      const ap=preferred.includes(a)?-5:0,bp=preferred.includes(b)?-5:0;
+      return ocScore(a,true,isArr)+ap-(ocScore(b,true,isArr)+bp);
+    });
 
     let chosen=sorted.slice(0,needed);
     if(chosen.length<needed){
-      const fb=pool.filter(dr=>{
-        if(dr.name===tDoc||dayState(dr.name,day)===1||isNgPair(tDoc,dr.name))return false;
-        return !chosen.find(c=>c.name===dr.name);
-      });
+      const fb=pool.filter(dr=>!chosen.find(c=>c.name===dr.name)&&dr.name!==tDoc&&dayState(dr.name,day)!==1&&!isNgPair(tDoc,dr.name));
       fb.sort((a,b)=>ocScore(a,true,isArr)-ocScore(b,true,isArr));
       const extra=fb.slice(0,needed-chosen.length);
       if(extra.length)warnings.push(`${day}：oncall設定回数を超えて割り当てました`);
@@ -916,7 +916,7 @@ function generate(){
   });
 
   // =============================================
-  // PHASE 3: 平日当直・oncallを決める
+  // PHASE 3: 平日当直・oncallを配置
   // =============================================
 
   // 不整脈グループ平日当直
@@ -924,9 +924,7 @@ function generate(){
     let assigned=0;
     for(const day of weekdays){
       if(assigned>=(monthConfig[d.name]?.tW||0))break;
-      if(schedule[day].tochoku||dayState(d.name,day))continue;
-      if(schedule[getPrevDay(day)]?.tochoku===d.name)continue;
-      if(hasRecentTochoku(d.name,day))continue;
+      if(!canAssignTochoku(d,day,false))continue;
       schedule[day].tochoku=d.name;tW[d.name]++;rem[d.name].tW--;assigned++;
     }
     if(assigned<(monthConfig[d.name]?.tW||0))
@@ -935,22 +933,17 @@ function generate(){
 
   // 虚血グループ平日当直
   weekdays.filter(d=>!schedule[d].tochoku).forEach(day=>{
-    const prevTochoku=schedule[getPrevDay(day)]?.tochoku;
     const avail=doctors.filter(d=>{
-      if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return false;
-      if(rem[d.name].tW<=0||dayState(d.name,day)||prevTochoku===d.name)return false;
-      if(hasRecentTochoku(d.name,day))return false;
-      return true;
+      if(d.role==='arrhythmia'||visitingSet.has(d.name))return false;
+      return canAssignTochoku(d,day,false);
     });
-    const pool=avail.length?avail:doctors.filter(d=>{
-      if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return false;
-      if(rem[d.name].tW<=0||dayState(d.name,day)||prevTochoku===d.name)return false;
-      return true;
-    });
-    if(!avail.length&&pool.length)warnings.push(`${day}：間隔ルールを緩和して割り当てました`);
-    pool.sort((a,b)=>tScore(a,false)-tScore(b,false));
-    if(pool.length){const ch=pool[0];schedule[day].tochoku=ch.name;tW[ch.name]++;rem[ch.name].tW--;}
-    else warnings.push(`${day}：当直担当を割り当てられませんでした`);
+    if(!avail.length){
+      warnings.push(`${day}：平日当直の候補者なし（中3日ルール・希望休等）`);
+      return;
+    }
+    avail.sort((a,b)=>tScore(a,false)-tScore(b,false));
+    const ch=avail[0];
+    schedule[day].tochoku=ch.name;tW[ch.name]++;rem[ch.name].tW--;
   });
 
   // 平日oncall
@@ -961,19 +954,11 @@ function generate(){
     const needed=isVisiting?2:1;
     const pool=(isArr||isVisiting)?ischemicOncallPool:doctors.filter(d=>d.canOncall);
 
-    const avail=pool.filter(dr=>{
-      if(dr.name===tDoc||dayState(dr.name,day)===1||isNgPair(tDoc,dr.name))return false;
-      if(rem[dr.name].ocW<=0)return false;
-      return true;
-    });
-
+    const avail=pool.filter(dr=>canAssignOncall(dr,day,tDoc,false,isArr));
     avail.sort((a,b)=>ocScore(a,false,isArr)-ocScore(b,false,isArr));
     let chosen=avail.slice(0,needed);
     if(chosen.length<needed){
-      const fb=pool.filter(dr=>{
-        if(dr.name===tDoc||dayState(dr.name,day)===1||isNgPair(tDoc,dr.name))return false;
-        return !chosen.find(c=>c.name===dr.name);
-      });
+      const fb=pool.filter(dr=>!chosen.find(c=>c.name===dr.name)&&dr.name!==tDoc&&dayState(dr.name,day)!==1&&!isNgPair(tDoc,dr.name));
       fb.sort((a,b)=>ocScore(a,false,isArr)-ocScore(b,false,isArr));
       const extra=fb.slice(0,needed-chosen.length);
       if(extra.length)warnings.push(`${day}：oncall設定回数を超えて割り当てました`);
