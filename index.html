@@ -988,12 +988,12 @@ function exportCSV(){
   const days=getDays();
   const m=document.getElementById('target-month').value;
   const[y,mo]=m.split('-').map(Number);
-  let csv=`\uFEFF当直表 ${y}年${mo}月\n日付,曜日,区分,負担,当直,oncall1,oncall2\n`;
+  let csv=`\uFEFF当直表 ${y}年${mo}月\n日付,曜日,区分,当直,oncall1,oncall2\n`;
   days.forEach(day=>{
     const date=new Date(day+'T00:00:00');
     const heavy=isHeavy(day),cHol=isClinicHol(day);
     const s=schedule[day]||{tochoku:null,oncall:[]};
-    csv+=`${date.getMonth()+1}/${date.getDate()},${dowLabel(day)},${heavy?'土日・重祝日':(cHol?'祝日診療':'平日')},${heavy?'日勤+夜勤':'夜勤のみ'},${s.tochoku||''},${s.oncall[0]||''},${s.oncall[1]||''}\n`;
+    csv+=`${date.getMonth()+1}/${date.getDate()},${dowLabel(day)},${heavy?'土日・重祝日':(cHol?'祝日診療':'平日')},${s.tochoku||''},${s.oncall[0]||''},${s.oncall[1]||''}\n`;
   });
   csv+=`\n個人別集計\n医師,平日当直,休日当直,当直計,平日oncall,休日oncall,oncall計\n`;
   doctors.forEach(d=>{
