@@ -741,7 +741,7 @@ function generate(){
       if(assigned>=(monthConfig[d.name]?.tH||0))break;
       if(dayState(d.name,day)||schedule[day].tochoku)continue;
       if(schedule[getPrevDay(day)]?.tochoku===d.name)continue;
-      if(recentTochokuCount(d.name,day)>=2)continue;
+      if(hasRecentTochoku(d.name,day))continue;
       schedule[day].tochoku=d.name;tH[d.name]++;rem[d.name].tH--;assigned++;
     }
     if(assigned<(monthConfig[d.name]?.tH||0))warnings.push(`${d.name}：休日当直${monthConfig[d.name]?.tH}回を確保できませんでした（${assigned}回）`);
@@ -754,7 +754,7 @@ function generate(){
       if(assigned>=(monthConfig[d.name]?.tW||0))break;
       if(schedule[day].tochoku||dayState(d.name,day))continue;
       if(schedule[getPrevDay(day)]?.tochoku===d.name)continue;
-      if(recentTochokuCount(d.name,day)>=2)continue;
+      if(hasRecentTochoku(d.name,day))continue;
       schedule[day].tochoku=d.name;tW[d.name]++;rem[d.name].tW--;assigned++;
     }
     if(assigned<(monthConfig[d.name]?.tW||0))warnings.push(`${d.name}：平日当直${monthConfig[d.name]?.tW}回を確保できませんでした（${assigned}回）`);
@@ -762,15 +762,15 @@ function generate(){
 
   // Step4: 虚血グループ当直（残り回数多い人優先）
   // 直近10日以内の当直回数チェック（2回以上なら除外）
-  function recentTochokuCount(name, currentDay){
-    let count=0;
+  // 直近3日以内に当直があればtrue（4日以上の間隔を保証）
+  function hasRecentTochoku(name, currentDay){
     const cur=new Date(currentDay+'T00:00:00');
-    for(let i=1;i<=10;i++){
+    for(let i=1;i<=3;i++){
       const d=new Date(cur);d.setDate(d.getDate()-i);
       const ds=d.toISOString().slice(0,10);
-      if(schedule[ds]?.tochoku===name)count++;
+      if(schedule[ds]?.tochoku===name)return true;
     }
-    return count;
+    return false;
   }
 
   function tScore(d,heavy){
@@ -786,7 +786,7 @@ function generate(){
     const avail=doctors.filter(d=>{
       if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return false;
       if(rem[d.name].tH<=0||dayState(d.name,day)||prevTochoku===d.name)return false;
-      if(recentTochokuCount(d.name,day)>=2)return false;
+      if(hasRecentTochoku(d.name,day))return false;
       return true;
     });
     let preferred=isSunday(day)?avail.filter(d=>prevOncall.includes(d.name)):[];
@@ -802,7 +802,7 @@ function generate(){
     const avail=doctors.filter(d=>{
       if(!d.canTochoku||visitingSet.has(d.name)||d.role==='arrhythmia')return false;
       if(rem[d.name].tW<=0||dayState(d.name,day)||prevTochoku===d.name)return false;
-      if(recentTochokuCount(d.name,day)>=2)return false;
+      if(hasRecentTochoku(d.name,day))return false;
       return true;
     });
     avail.sort((a,b)=>tScore(a,false)-tScore(b,false));
