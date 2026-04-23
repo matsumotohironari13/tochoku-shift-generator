@@ -3,211 +3,615 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>当直表スケジューラ</title>
+<title>シフト作成アプリ</title>
 <style>
+:root{
+  --bg:#F7F6F3;--surface:#FFFFFF;--border:#E5E3DE;--border-strong:#C8C4BC;
+  --text:#1C1917;--text-2:#6B6760;--text-3:#9C9994;
+  --accent:#2D5BE3;--accent-light:#EEF2FC;--accent-dark:#1E3FA0;
+  --danger:#DC2626;--danger-light:#FEF2F2;
+  --warn:#D97706;--warn-light:#FFFBEB;
+  --success:#16A34A;--success-light:#F0FDF4;
+  --radius:10px;--radius-sm:6px;--radius-lg:14px;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:0 4px 12px rgba(0,0,0,.10),0 2px 4px rgba(0,0,0,.06);
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;background:#f5f5f5;color:#1a1a1a;font-size:15px}
-.app{max-width:900px;margin:0 auto;padding:1.5rem 1rem}
-h1{font-size:18px;font-weight:600;margin-bottom:1.5rem}
-.tabs{display:flex;border-bottom:1px solid #e0e0e0;margin-bottom:1.5rem;flex-wrap:wrap;background:#fff;border-radius:8px 8px 0 0;padding:0 .5rem}
-.tab{padding:10px 14px;font-size:13px;cursor:pointer;border:none;background:none;color:#666;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
-.tab.active{color:#1a1a1a;border-bottom:2px solid #1a1a1a;font-weight:600}
-.panel{display:none}.panel.active{display:block}
-.stitle{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#888;margin-bottom:8px}
-.card{background:#fff;border:1px solid #e8e8e8;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-input[type=month]{height:36px;border:1px solid #ddd;border-radius:8px;padding:0 10px;font-size:14px;background:#fff;color:#1a1a1a;outline:none}
-input[type=number]{height:30px;border:1px solid #ddd;border-radius:6px;padding:0 6px;font-size:13px;background:#fff;color:#1a1a1a;outline:none;width:46px;text-align:center}
-input[type=number]:focus{border-color:#555}
-.btn{height:36px;padding:0 14px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;font-size:13px;cursor:pointer}
-.btn:hover{background:#f0f0f0}
-.btn.primary{background:#1a1a1a;color:#fff;border-color:#1a1a1a;font-size:14px}
-.btn.primary:hover{background:#333}
-.cb-label{display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer}
-.cb-label input{width:15px;height:15px}
-.dr-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #f0f0f0;flex-wrap:wrap}
-.dr-row:last-child{border-bottom:none}
-.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-.hgrid{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
-.hbtn{font-size:11px;padding:4px 9px;border:1px solid #e0e0e0;border-radius:20px;background:#f8f8f8;cursor:pointer;color:#666;user-select:none;-webkit-user-select:none}
-.hbtn.we{font-weight:600;color:#333}
-.hbtn.s1{background:#E24B4A!important;color:#fff!important;border-color:#E24B4A!important;font-weight:600}
-.hbtn.s2{background:#EF9F27!important;color:#fff!important;border-color:#EF9F27!important;font-weight:600}
-.cfg-table{width:100%;border-collapse:collapse;font-size:12px}
-.cfg-table th{padding:6px 6px;text-align:center;font-weight:600;color:#888;font-size:11px;border-bottom:2px solid #eee;white-space:nowrap}
-.cfg-table th.left{text-align:left}
-.cfg-table td{padding:5px 5px;border-bottom:1px solid #f0f0f0;text-align:center;vertical-align:middle}
-.cfg-table td.name{text-align:left;font-weight:500;white-space:nowrap;padding-left:2px}
-.cfg-table tfoot td{padding:6px 5px;font-size:12px;text-align:center;border-top:2px solid #eee;font-weight:600}
-.cfg-table tfoot td.left{text-align:left}
+body{font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6;min-height:100vh}
+/* Layout */
+.app-shell{display:grid;grid-template-rows:56px 1fr;min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:12px;position:sticky;top:0;z-index:100}
+.topbar-logo{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--text)}
+.topbar-logo span{color:var(--accent)}
+.topbar-save-status{margin-left:auto;font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:6px}
+.save-dot{width:6px;height:6px;border-radius:50%;background:var(--success)}
+.main{display:grid;grid-template-columns:220px 1fr;gap:0;height:calc(100vh - 56px);overflow:hidden}
+/* Sidebar */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:16px 12px}
+.sidebar-section{margin-bottom:4px}
+.sidebar-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);padding:8px 8px 4px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;color:var(--text-2);transition:all .12s;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--bg);color:var(--text)}
+.nav-item.active{background:var(--accent-light);color:var(--accent);font-weight:500}
+.nav-item .nav-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--accent);color:#fff;font-size:10px;padding:1px 6px;border-radius:20px;font-weight:600}
+.nav-divider{height:1px;background:var(--border);margin:8px 0}
+/* Content */
+.content{overflow-y:auto;padding:28px 32px;max-width:900px}
+.page{display:none}.page.active{display:block}
+.page-header{margin-bottom:24px}
+.page-title{font-size:20px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+.page-desc{font-size:13px;color:var(--text-2);line-height:1.6}
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 24px;margin-bottom:16px;box-shadow:var(--shadow)}
+.card-title{font-size:13px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-title .icon{font-size:16px}
+/* Form elements */
+.field{margin-bottom:14px}
+.field-label{font-size:12px;font-weight:500;color:var(--text-2);margin-bottom:5px;display:block}
+input[type=text],input[type=month],input[type=number],select,textarea{
+  width:100%;height:36px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  padding:0 10px;font-size:13px;background:var(--surface);color:var(--text);outline:none;
+  transition:border-color .12s;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,91,227,.12)}
+textarea{height:auto;padding:8px 10px;resize:vertical}
+input[type=number]{width:60px;text-align:center}
+input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+/* Buttons */
+.btn{height:34px;padding:0 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .12s;display:inline-flex;align-items:center;gap:6px;font-family:inherit}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-dark)}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border-strong)}.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--danger-light);color:var(--danger);border:1px solid #FECACA}.btn-danger:hover{background:#FEE2E2}
+.btn-sm{height:28px;padding:0 10px;font-size:12px}
+.btn-icon{width:30px;height:30px;padding:0;border-radius:var(--radius-sm);display:inline-flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--border);cursor:pointer;font-size:14px;transition:all .12s}
+.btn-icon:hover{background:var(--border);border-color:var(--border-strong)}
+/* Tables */
+.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text-2);background:var(--bg);border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg)}
+/* Tags */
+.tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap}
+.tag-blue{background:var(--accent-light);color:var(--accent)}
+.tag-green{background:var(--success-light);color:var(--success)}
+.tag-orange{background:var(--warn-light);color:var(--warn)}
+.tag-red{background:var(--danger-light);color:var(--danger)}
+.tag-gray{background:var(--bg);color:var(--text-2);border:1px solid var(--border)}
+/* Color dot */
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0}
+/* Role badge */
+.role-badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+/* Chips for holiday */
+.chip-grid{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.day-chip{padding:4px 9px;border-radius:20px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text-2);user-select:none;transition:all .1s}
+.day-chip.we{font-weight:600;color:var(--text)}
+.day-chip.off{background:var(--danger);color:#fff;border-color:var(--danger)}
+.day-chip.oncall-only{background:var(--warn);color:#fff;border-color:var(--warn)}
+/* Info box */
+.info{background:var(--accent-light);border:1px solid #BFD0F7;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--accent-dark);margin-bottom:16px;line-height:1.6}
+.warn-box{background:var(--warn-light);border:1px solid #FDE68A;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#92400E;margin-bottom:12px}
+.success-box{background:var(--success-light);border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#166534;margin-bottom:12px}
+/* Section divider */
+.section-sep{height:1px;background:var(--border);margin:20px 0}
+/* Toggle */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-label{font-size:13px;color:var(--text)}
+.toggle-desc{font-size:11px;color:var(--text-3);margin-top:1px}
+/* Month info */
+.month-stat{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;text-align:center}
+.stat-val{font-size:22px;font-weight:700;margin-bottom:2px}
+.stat-lbl{font-size:11px;color:var(--text-3)}
+/* Config table */
+.cfg-table th{text-align:center}.cfg-table th:first-child{text-align:left}
+.cfg-table td{text-align:center}.cfg-table td:first-child{text-align:left}
+.cfg-table input[type=number]{width:50px}
+.sum-row td{font-weight:600;background:var(--bg);border-top:2px solid var(--border)}
+.need-row td{font-size:11px;color:var(--text-3);background:var(--bg)}
+/* Hol type */
+.hol-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:5px;background:var(--surface);transition:all .1s}
+.hol-btn.heavy{background:var(--warn-light);color:var(--warn);border-color:#FDE68A}
+.hol-btn.clinic{background:var(--success-light);color:var(--success);border-color:#BBF7D0}
+/* Week block */
+.week-block{border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:6px;cursor:pointer;transition:all .1s}
+.week-block:hover{background:var(--bg)}
+.week-block.selected{border-color:var(--accent);background:var(--accent-light)}
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius-lg);padding:24px;width:480px;max-width:90vw;box-shadow:var(--shadow-md)}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:16px}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+/* Save button area */
+.save-bar{background:var(--surface);border-top:1px solid var(--border);padding:14px 32px;display:flex;align-items:center;gap:10px;position:sticky;bottom:0}
+/* Calendar */
 .cal-wrap{overflow-x:auto}
-.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(55px,1fr));gap:3px;margin-bottom:.5rem;min-width:400px}
-.cal-hd{font-size:11px;text-align:center;color:#888;padding:3px;font-weight:600}
-.cal-day{font-size:11px;padding:3px 4px;border-radius:8px;min-height:68px;border:1px solid #e8e8e8;background:#fff;overflow:hidden}
-.cal-day.empty{border:none;background:none}
-.dn{font-size:12px;font-weight:700;margin-bottom:2px;display:flex;align-items:center;gap:3px}
-.dtype{font-size:8px;padding:1px 4px;border-radius:6px;font-weight:500}
-.dtype.we{background:#dbeafe;color:#1d4ed8}
-.dtype.ch{background:#dcfce7;color:#166534}
-.dt{font-size:9px;line-height:1.5;color:#333}
-.oc{font-size:9px;color:#2563eb;line-height:1.4}
-.day-we{background:#eff6ff}.day-arr{background:#fff5f0}.day-vis{background:#f5f0ff}.day-ch{background:#f0fff4}
-.shortage{background:#fee2e2!important}
-.cell-edit{cursor:pointer;border-radius:4px;padding:1px 3px;display:inline-block}
-.cell-edit:hover{background:rgba(0,0,0,.08);text-decoration:underline}
-.edit-dropdown{position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9999;min-width:120px;overflow:hidden}
-.edit-dropdown .dd-item{padding:8px 14px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f0f0}
-.edit-dropdown .dd-item:last-child{border-bottom:none}
-.edit-dropdown .dd-item:hover{background:#f5f5f5}
-.edit-dropdown .dd-header{padding:6px 14px;font-size:10px;font-weight:600;color:#888;background:#f8f8f8;text-transform:uppercase;letter-spacing:.05em}
-.mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:1rem}
-.metric{background:#f8f8f8;border-radius:8px;padding:10px 12px;border:1px solid #eee}
-.metric .lbl{font-size:11px;color:#888;margin-bottom:3px}
-.metric .val{font-size:20px;font-weight:600}
-.rtable{width:100%;border-collapse:collapse;font-size:12px}
-.rtable th{padding:6px 8px;text-align:left;font-weight:600;color:#888;font-size:11px;border-bottom:2px solid #eee}
-.rtable td{padding:6px 8px;border-bottom:1px solid #f0f0f0}
-.rtable tr:last-child td{border-bottom:none}
-.warn{background:#fffbeb;border:1px solid #f59e0b;color:#92400e;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:.75rem;line-height:1.8}
-.ok{background:#f0fdf4;border:1px solid #86efac;color:#166534;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:.75rem}
-.info-box{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:8px;padding:8px 14px;font-size:13px;margin-bottom:1rem}
-.hol-toggle{font-size:12px;padding:5px 11px;border-radius:20px;border:1px solid #ddd;cursor:pointer;display:flex;align-items:center;gap:5px;background:#fff}
-.hol-toggle.is-heavy{background:#fff7ed;color:#9a3412;border-color:#fdba74}
-.hol-toggle.is-light{background:#f0fdf4;color:#166534;border-color:#86efac}
-.week-block{border:1px solid #e8e8e8;border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;background:#fff}
-.week-block:hover{background:#f8f8f8}
-.week-block.selected{border-color:#6366f1;background:#eef2ff}
-.wd-chip{font-size:11px;padding:2px 8px;border-radius:20px}
-.wd-chip.sat{background:#dbeafe;color:#1d4ed8;font-weight:600}
-.wd-chip.sun{background:#fee2e2;color:#991b1b;font-weight:600}
-.legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:.75rem;font-size:11px;color:#666}
-.legend span{display:flex;align-items:center;gap:4px}
-.legend-sq{display:inline-block;width:10px;height:10px;border-radius:3px;flex-shrink:0}
-.section-title{font-size:13px;font-weight:600;margin-bottom:10px;color:#333}
-.cell-name{cursor:default;border-radius:3px;padding:1px 2px;transition:background .1s}
-.cal-day.highlighted{outline:2px solid #6366f1;outline-offset:-1px;background:#eef2ff!important;z-index:1;position:relative}
-.name-tag{display:inline-block;border-radius:3px;padding:0 2px;cursor:default}
-.name-tag.hoverable:hover{background:rgba(99,102,241,.15);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(80px,1fr));gap:3px;min-width:560px}
+.cal-hd{font-size:11px;font-weight:600;text-align:center;color:var(--text-3);padding:4px}
+.cal-cell{border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 6px;min-height:72px;background:var(--surface);font-size:11px;position:relative}
+.cal-cell.empty{border:none;background:none}
+.cal-cell.heavy{background:#EFF6FF}
+.cal-cell.arrh{background:#FFF7ED}
+.cal-cell.visiting{background:#F5F0FF}
+.cal-cell.clinic-hol{background:#F0FDF4}
+.cal-cell.shortage{background:#FEF2F2!important;border-color:#FECACA!important}
+.cal-cell.highlighted{outline:2px solid var(--accent);outline-offset:-1px;background:var(--accent-light)!important;z-index:1}
+.cal-date{font-weight:700;font-size:12px;margin-bottom:3px;display:flex;align-items:center;gap:4px}
+.cal-type{font-size:8px;padding:1px 4px;border-radius:4px;font-weight:500}
+.cal-type.we{background:#DBEAFE;color:#1D4ED8}
+.cal-type.ch{background:#DCFCE7;color:#166534}
+.cal-tochoku{cursor:pointer;border-radius:3px;padding:1px 3px;display:inline-block;font-size:10px;line-height:1.4}
+.cal-tochoku:hover{background:rgba(0,0,0,.08);text-decoration:underline}
+.cal-oncall{font-size:9px;color:var(--accent);line-height:1.5}
+.cal-oncall span{cursor:pointer;border-radius:3px;padding:1px 2px}
+.cal-oncall span:hover{background:rgba(0,0,0,.08)}
+.cal-add{font-size:9px;color:var(--text-3);cursor:pointer}
+.cal-add:hover{color:var(--accent)}
+/* Dropdown */
+.sh-dropdown{position:fixed;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow-md);z-index:9999;min-width:130px;overflow:hidden}
+.sh-dropdown .dd-hd{font-size:10px;font-weight:600;color:var(--text-3);padding:6px 12px;background:var(--bg);letter-spacing:.06em;text-transform:uppercase}
+.sh-dropdown .dd-item{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px}
+.sh-dropdown .dd-item:last-child{border-bottom:none}
+.sh-dropdown .dd-item:hover{background:var(--bg)}
+.sh-dropdown{max-height:260px;overflow-y:auto}
+/* Summary table */
+.sum-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.sum-tbl th{padding:5px 8px;text-align:center;font-size:11px;font-weight:600;color:var(--text-2);border-bottom:2px solid var(--border)}
+.sum-tbl th:first-child{text-align:left}
+.sum-tbl td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:center}
+.sum-tbl td:first-child{text-align:left}
 </style>
 </head>
 <body>
-<div class="app">
-<h1>当直表スケジューラ</h1>
-<div class="tabs">
-  <button class="tab active" onclick="switchTab('members')">メンバー</button>
-  <button class="tab" onclick="switchTab('monthly')">月の設定</button>
-  <button class="tab" onclick="switchTab('config')">回数設定</button>
-  <button class="tab" onclick="switchTab('holidays')">希望休</button>
-  <button class="tab" onclick="switchTab('generate')">生成</button>
-</div>
+<div class="app-shell">
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-logo">Shift<span>Maker</span></div>
+    <div class="topbar-save-status" id="save-status">
+      <span class="save-dot"></span>
+      <span id="save-label">固定設定を保存済み</span>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="saveFixedConfig()" style="margin-left:8px">💾 固定設定を保存</button>
+  </header>
 
-<!-- メンバー -->
-<div id="tab-members" class="panel active">
-  <p class="stitle">対象月</p>
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:8px">
-      <input type="month" id="target-month" onchange="onMonthChange()">
-      <span style="font-size:14px;color:#888">の当直表を作成</span>
+  <div class="main">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">固定設定</div>
+        <button class="nav-item active" onclick="switchPage('members')" id="nav-members">
+          <span class="nav-icon">👥</span>メンバー管理
+        </button>
+        <button class="nav-item" onclick="switchPage('roles')" id="nav-roles">
+          <span class="nav-icon">🏷️</span>役割・グループ
+        </button>
+        <button class="nav-item" onclick="switchPage('rules')" id="nav-rules">
+          <span class="nav-icon">⚙️</span>ルール設定
+        </button>
+        <button class="nav-item" onclick="switchPage('slots')" id="nav-slots">
+          <span class="nav-icon">📋</span>枠数定義
+        </button>
+        <button class="nav-item" onclick="switchPage('count-config')" id="nav-count-config">
+          <span class="nav-icon">🔢</span>回数範囲設定
+        </button>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">月次設定</div>
+        <button class="nav-item" onclick="switchPage('monthly')" id="nav-monthly">
+          <span class="nav-icon">📅</span>月の設定
+        </button>
+        <button class="nav-item" onclick="switchPage('count-monthly')" id="nav-count-monthly">
+          <span class="nav-icon">📊</span>今月の回数
+        </button>
+        <button class="nav-item" onclick="switchPage('holidays')" id="nav-holidays">
+          <span class="nav-icon">🙏</span>希望休
+        </button>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">シフト生成</div>
+        <button class="nav-item" onclick="switchPage('generate')" id="nav-generate">
+          <span class="nav-icon">✨</span>シフト生成
+        </button>
+      </div>
+    </nav>
+
+    <!-- Content -->
+    <div class="content" id="content">
+
+      <!-- ========== メンバー管理 ========== -->
+      <div class="page active" id="page-members">
+        <div class="page-header">
+          <div class="page-title">メンバー管理</div>
+          <div class="page-desc">シフトに参加するメンバーを登録します。当直可・oncall可は固定条件として保存されます。</div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="icon">👥</span>メンバー一覧</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>名前</th><th>役割グループ</th><th>当直可</th><th>oncall可</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="member-tbody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:12px">
+            <button class="btn btn-secondary btn-sm" onclick="openAddMemberModal()">＋ メンバーを追加</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span class="icon">🚫</span>同日NGペア設定</div>
+          <div class="page-desc" style="margin-bottom:12px">特定の2人が同じ日に当直・oncallに入れない組み合わせを設定します。</div>
+          <div id="ng-pairs-list"></div>
+          <button class="btn btn-secondary btn-sm" onclick="openAddNGModal()" style="margin-top:10px">＋ NGペアを追加</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span class="icon">🔧</span>特殊条件</div>
+          <div id="special-conditions-list"></div>
+          <button class="btn btn-secondary btn-sm" onclick="openAddSpecialModal()" style="margin-top:10px">＋ 特殊条件を追加</button>
+        </div>
+      </div>
+
+      <!-- ========== 役割・グループ ========== -->
+      <div class="page" id="page-roles">
+        <div class="page-header">
+          <div class="page-title">役割・グループ定義</div>
+          <div class="page-desc">メンバーの役割グループを定義します。グループごとにルールを適用できます。</div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="icon">🏷️</span>グループ一覧</div>
+          <div id="roles-list"></div>
+          <button class="btn btn-secondary btn-sm" onclick="openAddRoleModal()" style="margin-top:12px">＋ グループを追加</button>
+        </div>
+      </div>
+
+      <!-- ========== ルール設定 ========== -->
+      <div class="page" id="page-rules">
+        <div class="page-header">
+          <div class="page-title">ルール設定</div>
+          <div class="page-desc">シフト生成時に適用するルールを設定します。施設ごとにカスタマイズできます。</div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="icon">📏</span>当直ルール</div>
+          <div class="field">
+            <label class="field-label">最低間隔日数（中○日）</label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px;color:var(--text-2)">中</span>
+              <input type="number" id="rule-interval" min="1" max="14" value="3" style="width:60px">
+              <span style="font-size:13px;color:var(--text-2)">日（＝前後</span>
+              <span id="rule-interval-display" style="font-weight:600">4</span>
+              <span style="font-size:13px;color:var(--text-2)">日以上空ける）</span>
+            </div>
+          </div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">連日当直禁止</div><div class="toggle-desc">翌日の当直を禁止する</div></div>
+            <input type="checkbox" id="rule-no-consecutive" checked>
+          </div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">月全体に均等配置</div><div class="toggle-desc">月前半・後半に偏らないよう分散する</div></div>
+            <input type="checkbox" id="rule-even-dist" checked>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span class="icon">📞</span>oncallルール</div>
+          <div class="field">
+            <label class="field-label">最大連続oncall日数</label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="number" id="rule-max-oncall-consec" min="1" max="7" value="3" style="width:60px">
+              <span style="font-size:13px;color:var(--text-2)">日連続まで</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span class="icon">🗓️</span>土日ルール</div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">土曜当直→日曜oncallのセット優先</div><div class="toggle-desc">土曜に当直した人を翌日曜のoncallに優先する</div></div>
+            <input type="checkbox" id="rule-weekend-set" checked>
+          </div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">土曜oncall→日曜当直のセット優先</div><div class="toggle-desc">土曜にoncallした人を翌日曜の当直に優先する</div></div>
+            <input type="checkbox" id="rule-weekend-set2" checked>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span class="icon">📆</span>月をまたいだルール</div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">前月末の当直を考慮する</div><div class="toggle-desc">前月の最終数日の当直情報を入力して中3日ルールに反映する</div></div>
+            <input type="checkbox" id="rule-prev-month" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 枠数定義 ========== -->
+      <div class="page" id="page-slots">
+        <div class="page-header">
+          <div class="page-title">枠数定義</div>
+          <div class="page-desc">1日あたりの当直・oncallの枠数を設定します。施設によって異なります。</div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="icon">📋</span>平日の枠数</div>
+          <div id="weekday-slots"></div>
+          <button class="btn btn-secondary btn-sm" onclick="addSlot('weekday')" style="margin-top:10px">＋ 枠を追加</button>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="icon">📋</span>土日・祝日の枠数</div>
+          <div id="holiday-slots"></div>
+          <button class="btn btn-secondary btn-sm" onclick="addSlot('holiday')" style="margin-top:10px">＋ 枠を追加</button>
+        </div>
+      </div>
+
+      <!-- ========== 回数範囲設定 ========== -->
+      <div class="page" id="page-count-config">
+        <div class="page-header">
+          <div class="page-title">回数範囲設定</div>
+          <div class="page-desc">各メンバーの当直・oncallの月間回数の範囲（Min〜Max）を設定します。固定回数の場合はMin=Maxにします。</div>
+        </div>
+        <div class="card">
+          <div style="overflow-x:auto">
+            <table class="cfg-table">
+              <thead>
+                <tr>
+                  <th style="text-align:left">医師</th>
+                  <th colspan="2">平日当直</th>
+                  <th colspan="2">休日当直</th>
+                  <th colspan="2">平日oncall</th>
+                  <th colspan="2">休日oncall</th>
+                </tr>
+                <tr>
+                  <th style="text-align:left"></th>
+                  <th>Min</th><th>Max</th>
+                  <th>Min</th><th>Max</th>
+                  <th>Min</th><th>Max</th>
+                  <th>Min</th><th>Max</th>
+                </tr>
+              </thead>
+              <tbody id="count-config-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== 月の設定 ========== -->
+      <div class="page" id="page-monthly">
+        <div class="page-header">
+          <div class="page-title">月の設定</div>
+          <div class="page-desc">対象月・祝日種別・外勤メンバーの出勤週を設定します。</div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="icon">📅</span>対象月</div>
+          <input type="month" id="target-month" onchange="onMonthChange()" style="width:200px">
+          <div class="month-stat" id="month-stat" style="margin-top:14px;display:none">
+            <div class="stat-box"><div class="stat-val" id="stat-weekdays">-</div><div class="stat-lbl">平日</div></div>
+            <div class="stat-box"><div class="stat-val" id="stat-heavy" style="color:var(--danger)">-</div><div class="stat-lbl">土日・重祝日</div></div>
+            <div class="stat-box"><div class="stat-val" id="stat-clinic" style="color:var(--success)">-</div><div class="stat-lbl">祝日診療日</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span class="icon">🎌</span>祝日の種別設定</div>
+          <div class="page-desc" style="margin-bottom:10px">
+            <span style="color:var(--warn);font-weight:600">土日扱</span>＝月制限あり　／　
+            <span style="color:var(--success);font-weight:600">診療祝</span>＝平日扱い・制限なし
+          </div>
+          <div id="hol-type-area" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        </div>
+
+        <div id="visiting-config" class="card" style="display:none">
+          <div class="card-title"><span class="icon">🚗</span>外勤メンバーの出勤週</div>
+          <div id="visiting-week-area"></div>
+        </div>
+
+        <div class="card" id="prev-month-card" style="display:none">
+          <div class="card-title"><span class="icon">📆</span>前月末の当直情報</div>
+          <div class="page-desc" style="margin-bottom:12px">月をまたいだ中3日ルールのため、前月の最終4日間の当直者を入力してください。</div>
+          <div id="prev-month-inputs"></div>
+        </div>
+      </div>
+
+      <!-- ========== 今月の回数設定 ========== -->
+      <div class="page" id="page-count-monthly">
+        <div class="page-header">
+          <div class="page-title">今月の回数設定</div>
+          <div class="page-desc">今月の各メンバーの当直・oncall回数を設定します。推奨値を自動計算して表示します。</div>
+        </div>
+        <div class="info" id="monthly-count-info">対象月を選択すると推奨回数が自動計算されます。</div>
+        <div class="card">
+          <div style="overflow-x:auto">
+            <table class="cfg-table">
+              <thead>
+                <tr>
+                  <th style="text-align:left">医師</th>
+                  <th>平日当直</th><th>休日当直</th><th>当直計</th>
+                  <th>平日oncall</th><th>休日oncall</th><th>oncall計</th>
+                </tr>
+              </thead>
+              <tbody id="monthly-count-tbody"></tbody>
+              <tfoot>
+                <tr class="sum-row">
+                  <td style="text-align:left">合計</td>
+                  <td id="sum-tw"></td><td id="sum-th"></td><td id="sum-tc"></td>
+                  <td id="sum-ow"></td><td id="sum-oh"></td><td id="sum-oc"></td>
+                </tr>
+                <tr class="need-row">
+                  <td style="text-align:left">必要数</td>
+                  <td id="need-tw"></td><td id="need-th"></td><td id="need-tc"></td>
+                  <td id="need-ow"></td><td id="need-oh"></td><td id="need-oc"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn btn-secondary btn-sm" onclick="validateMonthlyCount()">設定を確認する</button>
+          </div>
+          <div id="monthly-count-warn" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+
+      <!-- ========== 希望休 ========== -->
+      <div class="page" id="page-holidays">
+        <div class="page-header">
+          <div class="page-title">希望休入力</div>
+          <div class="page-desc">各メンバーの希望休を入力します。タップして状態を切り替えます。入力は自動保存されます。</div>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px">
+            <span style="display:inline-block;width:28px;height:20px;border-radius:20px;background:var(--danger)"></span>休み
+          </span>
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px">
+            <span style="display:inline-block;width:28px;height:20px;border-radius:20px;background:var(--warn)"></span>oncallのみ
+          </span>
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px">
+            <span style="display:inline-block;width:28px;height:20px;border-radius:20px;background:var(--bg);border:1px solid var(--border)"></span>通常
+          </span>
+        </div>
+        <div id="holiday-panel"></div>
+      </div>
+
+      <!-- ========== シフト生成 ========== -->
+      <div class="page" id="page-generate">
+        <div class="page-header">
+          <div class="page-title">シフト生成</div>
+          <div class="page-desc">土日当直・oncallを自動生成します。生成後に手動で調整し、確定したら平日を生成します。</div>
+        </div>
+
+        <!-- プレチェック -->
+        <div class="card" id="gen-precheck"></div>
+
+        <!-- Step9: 土日生成 -->
+        <div id="gen-heavy-section">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+            <button class="btn btn-primary" onclick="generateHeavy()">🎲 土日当直・oncallを自動生成</button>
+            <button class="btn btn-secondary" id="btn-confirm-heavy" onclick="confirmHeavy()" style="display:none">✅ 土日を確定して平日を生成</button>
+            <button class="btn btn-secondary" id="btn-regen-heavy" onclick="generateHeavy()" style="display:none">🔄 再生成</button>
+          </div>
+          <div id="gen-warnings" style="margin-bottom:12px"></div>
+          <div id="gen-heavy-calendar"></div>
+        </div>
+
+        <!-- Step10: 平日生成 -->
+        <div id="gen-weekday-section" style="display:none">
+          <div class="section-sep"></div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:12px">平日当直・oncall</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+            <button class="btn btn-secondary" id="btn-regen-weekday" onclick="generateWeekday()">🔄 平日を再生成</button>
+            <button class="btn btn-secondary" onclick="exportCSV()">📥 CSVダウンロード</button>
+          </div>
+          <div id="gen-weekday-warnings" style="margin-bottom:12px"></div>
+          <div id="gen-weekday-calendar"></div>
+          <div id="gen-summary" style="margin-top:16px"></div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app-shell -->
+
+<!-- Add Member Modal -->
+<div class="modal-overlay" id="modal-member">
+  <div class="modal">
+    <div class="modal-title">メンバーを追加</div>
+    <div class="field"><label class="field-label">名前</label><input type="text" id="new-member-name" placeholder="例：山田"></div>
+    <div class="field">
+      <label class="field-label">役割グループ</label>
+      <select id="new-member-role"></select>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:4px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="new-member-can-tochoku" checked>当直可
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="new-member-can-oncall" checked>oncall可
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-member')">キャンセル</button>
+      <button class="btn btn-primary" onclick="addMember()">追加</button>
     </div>
   </div>
-  <p class="stitle">医師設定</p>
-  <div class="card"><div id="dr-list"></div></div>
 </div>
 
-<!-- 月の設定（祝日種別 + 八田出勤週） -->
-<div id="tab-monthly" class="panel">
-  <p class="stitle">月の設定</p>
-  <div class="info-box" id="month-info-monthly">対象月を選択してください</div>
-
-  <div class="card">
-    <div class="section-title">祝日の種別設定</div>
-    <p style="font-size:12px;color:#888;margin-bottom:10px;line-height:1.7"><span style="color:#9a3412;font-weight:600">土日扱</span>＝月制限あり　／　<span style="color:#166534;font-weight:600">診療祝</span>＝平日扱い・制限なし</p>
-    <div style="display:flex;flex-wrap:wrap;gap:6px" id="hol-type-area"></div>
-  </div>
-
-  <div class="card">
-    <div class="section-title">八田先生の出勤週</div>
-    <p style="font-size:12px;color:#888;margin-bottom:10px">入る週の土日をタップして選択。未選択の場合は月末土日に自動設定。</p>
-    <div id="visiting-week-area"></div>
-  </div>
-</div>
-
-<!-- 回数設定 -->
-<div id="tab-config" class="panel">
-  <p class="stitle">今月の担当回数設定</p>
-  <div class="info-box" id="month-info-config">対象月を選択してください</div>
-  <div class="card">
-    <p style="font-size:12px;color:#888;margin-bottom:12px">推奨回数を自動計算して表示しています。数値は直接編集できます。</p>
-    <div style="overflow-x:auto">
-    <table class="cfg-table">
-      <thead>
-        <tr>
-          <th class="left">医師</th>
-          <th>平日<br>当直</th>
-          <th>休日<br>当直</th>
-          <th>平日<br>oncall</th>
-          <th>休日<br>oncall</th>
-          <th>当直計</th>
-          <th>oncall計</th>
-          <th>当直計</th>
-          <th>oncall計</th>
-        </tr>
-      </thead>
-      <tbody id="cfg-body"></tbody>
-      <tfoot>
-        <tr>
-          <td class="left" style="font-weight:600;color:#333">合計</td>
-          <td id="sum-tW" style="font-weight:600"></td>
-          <td id="sum-tH" style="font-weight:600"></td>
-          <td id="sum-ocW" style="font-weight:600"></td>
-          <td id="sum-ocH" style="font-weight:600"></td>
-          <td id="sum-tTotal" style="font-weight:600"></td>
-          <td id="sum-ocTotal" style="font-weight:600"></td>
-        </tr>
-        <tr>
-          <td class="left" style="color:#888;font-size:11px">必要数</td>
-          <td id="need-tW" style="color:#888;font-size:11px"></td>
-          <td id="need-tH" style="color:#888;font-size:11px"></td>
-          <td id="need-ocW" style="color:#888;font-size:11px"></td>
-          <td id="need-ocH" style="color:#888;font-size:11px"></td>
-          <td id="need-tTotal" style="color:#888;font-size:11px"></td>
-          <td id="need-ocTotal" style="color:#888;font-size:11px"></td>
-        </tr>
-      </tfoot>
-    </table>
+<!-- Add Role Modal -->
+<div class="modal-overlay" id="modal-role">
+  <div class="modal">
+    <div class="modal-title">グループを追加</div>
+    <div class="field"><label class="field-label">グループ名</label><input type="text" id="new-role-name" placeholder="例：不整脈グループ"></div>
+    <div class="field">
+      <label class="field-label">カラー</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="role-color-picker"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-role')">キャンセル</button>
+      <button class="btn btn-primary" onclick="addRole()">追加</button>
     </div>
   </div>
-  <button class="btn primary" style="width:100%;height:38px" onclick="validateConfig()">設定を確認する</button>
-  <div id="config-warn" style="margin-top:.75rem"></div>
 </div>
 
-<!-- 希望休 -->
-<div id="tab-holidays" class="panel">
-  <p class="stitle">希望休入力</p>
-  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
-    <span style="display:flex;align-items:center;gap:6px;font-size:12px"><span style="display:inline-block;width:32px;height:22px;border-radius:20px;background:#E24B4A"></span>休み（1回）</span>
-    <span style="display:flex;align-items:center;gap:6px;font-size:12px"><span style="display:inline-block;width:32px;height:22px;border-radius:20px;background:#EF9F27"></span>oncallのみ（2回）</span>
-    <span style="display:flex;align-items:center;gap:6px;font-size:12px"><span style="display:inline-block;width:32px;height:22px;border-radius:20px;background:#f0f0f0;border:1px solid #ddd"></span>通常（3回で戻る）</span>
+<!-- Add NG Pair Modal -->
+<div class="modal-overlay" id="modal-ng">
+  <div class="modal">
+    <div class="modal-title">NGペアを追加</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <select id="ng-member1" style="width:130px"></select>
+      <span style="font-size:13px;color:var(--text-2)">と</span>
+      <select id="ng-member2" style="width:130px"></select>
+      <span style="font-size:13px;color:var(--text-2)">は同日NG</span>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-ng')">キャンセル</button>
+      <button class="btn btn-primary" onclick="addNGPair()">追加</button>
+    </div>
   </div>
-  <div id="holiday-panel"></div>
 </div>
 
-<!-- 生成 -->
-<div id="tab-generate" class="panel">
-  <div id="result-area">
-    <div class="card" id="pre-check"></div>
-    <button class="btn primary" style="width:100%;height:44px" onclick="generate()">当直表を自動生成</button>
+<!-- Add Special Condition Modal -->
+<div class="modal-overlay" id="modal-special">
+  <div class="modal">
+    <div class="modal-title">特殊条件を追加</div>
+    <div class="field">
+      <label class="field-label">対象メンバー</label>
+      <select id="special-member" style="width:160px"></select>
+    </div>
+    <div class="field">
+      <label class="field-label">条件の種類</label>
+      <select id="special-type">
+        <option value="oncall2">当直時はoncall2人必要</option>
+        <option value="visiting">外勤（指定週の土日2連続当直）</option>
+        <option value="groupOncall">当直時は特定グループからoncall</option>
+      </select>
+    </div>
+    <div class="field" id="special-group-field" style="display:none">
+      <label class="field-label">oncallグループ</label>
+      <select id="special-group"></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-special')">キャンセル</button>
+      <button class="btn btn-primary" onclick="addSpecialCondition()">追加</button>
+    </div>
   </div>
-</div>
 </div>
 
 <script>
-const COLORS=['#1D9E75','#378ADD','#639922','#D85A30','#7F77DD','#5F5E5A','#BA7517','#993C1D','#D4537E','#0F6E56','#85B7EB'];
-const DOW_LIST=['月','火','水','木','金','土','日'];
-const JA_HOL_DEFAULT={
-  '2025-01-01':true,'2025-01-13':true,'2025-02-11':false,'2025-02-23':false,'2025-02-24':false,'2025-03-20':false,
+// =====================
+// DATA MODEL
+// =====================
+const ROLE_COLORS=['#1D9E75','#378ADD','#639922','#D85A30','#7F77DD','#5F5E5A','#BA7517','#993C1D','#D4537E','#0F6E56','#85B7EB','#E06C75'];
+const JA_HOL={
+  '2025-01-01':true,'2025-01-13':true,'2025-02-11':false,'2025-02-23':false,'2025-03-20':false,
   '2025-04-29':false,'2025-05-03':true,'2025-05-04':true,'2025-05-05':false,'2025-05-06':false,
   '2025-07-21':false,'2025-08-11':true,'2025-09-15':false,'2025-09-23':false,
-  '2025-10-13':false,'2025-11-03':false,'2025-11-23':false,'2025-11-24':false,
+  '2025-10-13':false,'2025-11-03':false,'2025-11-23':false,
   '2026-01-01':true,'2026-01-12':true,'2026-02-11':false,'2026-02-23':false,'2026-03-20':false,
   '2026-04-29':false,'2026-05-03':true,'2026-05-04':true,'2026-05-05':false,'2026-05-06':false,
   '2026-07-20':false,'2026-08-11':true,'2026-09-21':false,'2026-09-22':false,'2026-09-23':false,
@@ -217,17 +621,62 @@ const JA_HOL_DEFAULT={
 };
 let holTypeOverrides={};
 let visitingWeekSelected={};
-const NG_PAIRS=[['坂元','舟田']];
+let prevMonthTochoku={}; // {date: name}
 
-function isHol(s){return s in JA_HOL_DEFAULT}
-function isHeavyHol(s){if(!isHol(s))return false;return s in holTypeOverrides?holTypeOverrides[s]:JA_HOL_DEFAULT[s]}
+// 固定設定（localStorage保存対象）
+let fixedConfig={
+  roles:[
+    {id:'ischemic',name:'虚血グループ',color:'#378ADD'},
+    {id:'arrhythmia',name:'不整脈グループ',color:'#D85A30'},
+    {id:'visiting',name:'外勤',color:'#85B7EB'},
+    {id:'senior',name:'シニア',color:'#1D9E75'},
+  ],
+  members:[
+    {id:'sakamoto',name:'坂元',roleId:'ischemic',canTochoku:true,canOncall:true,tWMin:0,tWMax:1,tHMin:0,tHMax:0,ocWMin:4,ocWMax:5,ocHMin:1,ocHMax:1},
+    {id:'uenishi',name:'上西',roleId:'arrhythmia',canTochoku:true,canOncall:false,tWMin:2,tWMax:2,tHMin:1,tHMax:1,ocWMin:0,ocWMax:0,ocHMin:0,ocHMax:0},
+    {id:'funada',name:'舟田',roleId:'ischemic',canTochoku:true,canOncall:true,tWMin:1,tWMax:2,tHMin:0,tHMax:1,ocWMin:3,ocWMax:5,ocHMin:1,ocHMax:1},
+    {id:'onuma',name:'大沼',roleId:'arrhythmia',canTochoku:true,canOncall:false,tWMin:2,tWMax:2,tHMin:1,tHMax:1,ocWMin:0,ocWMax:0,ocHMin:0,ocHMax:0},
+    {id:'yamazaki',name:'山崎',roleId:'ischemic',canTochoku:true,canOncall:true,tWMin:2,tWMax:3,tHMin:0,tHMax:1,ocWMin:3,ocWMax:4,ocHMin:1,ocHMax:1},
+    {id:'sakashita',name:'坂下',roleId:'ischemic',canTochoku:true,canOncall:true,tWMin:2,tWMax:3,tHMin:0,tHMax:1,ocWMin:3,ocWMax:4,ocHMin:1,ocHMax:1},
+    {id:'toyosaki',name:'豊崎',roleId:'ischemic',canTochoku:true,canOncall:true,tWMin:2,tWMax:3,tHMin:0,tHMax:1,ocWMin:3,ocWMax:4,ocHMin:1,ocHMax:1},
+    {id:'kishida',name:'岸田',roleId:'ischemic',canTochoku:true,canOncall:true,tWMin:2,tWMax:3,tHMin:0,tHMax:1,ocWMin:2,ocWMax:3,ocHMin:1,ocHMax:1},
+    {id:'ohta',name:'太田',roleId:'arrhythmia',canTochoku:true,canOncall:false,tWMin:2,tWMax:3,tHMin:1,tHMax:1,ocWMin:0,ocWMax:0,ocHMin:0,ocHMax:0},
+    {id:'matsumoto',name:'松本',roleId:'ischemic',canTochoku:true,canOncall:true,tWMin:2,tWMax:3,tHMin:0,tHMax:1,ocWMin:2,ocWMax:3,ocHMin:1,ocHMax:1},
+    {id:'hatta',name:'八田',roleId:'visiting',canTochoku:true,canOncall:false,tWMin:0,tWMax:0,tHMin:2,tHMax:2,ocWMin:0,ocWMax:0,ocHMin:0,ocHMax:0},
+  ],
+  ngPairs:[['sakamoto','funada']],
+  specialConditions:[
+    {type:'visiting',memberId:'hatta'},
+    {type:'oncall2',memberId:'hatta'},
+    {type:'groupOncall',memberId:'uenishi',groupId:'ischemic'},
+    {type:'groupOncall',memberId:'onuma',groupId:'ischemic'},
+    {type:'groupOncall',memberId:'ohta',groupId:'ischemic'},
+  ],
+  rules:{
+    interval:3,noConsecutive:true,evenDist:true,
+    maxOncallConsec:3,weekendSet:true,weekendSet2:true,prevMonth:true
+  },
+  slots:{
+    weekday:[{name:'当直',count:1},{name:'oncall',count:1}],
+    holiday:[{name:'当直',count:1},{name:'oncall',count:1}],
+  }
+};
+
+// 月次設定
+let monthlyConfig={};
+let holidays={};
+fixedConfig.members.forEach(m=>{holidays[m.id]={}});
+
+// =====================
+// HELPERS
+// =====================
 function getDow(s){return new Date(s+'T00:00:00').getDay()}
-function dowLabel(s){const d=getDow(s);return DOW_LIST[d===0?6:d-1]}
+function isHol(s){return s in JA_HOL}
+function isHeavyHol(s){if(!isHol(s))return false;return s in holTypeOverrides?holTypeOverrides[s]:JA_HOL[s]}
 function isHeavy(s){const d=getDow(s);return d===6||d===0||isHeavyHol(s)}
 function isClinicHol(s){return isHol(s)&&!isHeavyHol(s)}
-function getPrevDay(s){const d=new Date(s+'T00:00:00');d.setDate(d.getDate()-1);return d.toISOString().slice(0,10)}
-function isNgPair(a,b){return NG_PAIRS.some(p=>(p[0]===a&&p[1]===b)||(p[0]===b&&p[1]===a))}
-function isSunday(s){return getDow(s)===0}
+const DOW_LABELS=['日','月','火','水','木','金','土'];
+function dowLabel(s){return DOW_LABELS[getDow(s)]}
 
 function getDays(){
   const m=document.getElementById('target-month').value;
@@ -240,6 +689,7 @@ function getDays(){
   }
   return days;
 }
+
 function getWeekendPairs(){
   const days=getDays();const pairs=[];
   for(let i=0;i<days.length;i++){
@@ -247,850 +697,1352 @@ function getWeekendPairs(){
   }
   return pairs;
 }
+
+function getMemberById(id){return fixedConfig.members.find(m=>m.id===id)}
+function getRoleById(id){return fixedConfig.roles.find(r=>r.id===id)}
+function getMemberColor(m){const r=getRoleById(m.roleId);return r?r.color:'#888'}
+
 function getMonthDayCounts(){
   const days=getDays();
   const heavy=days.filter(isHeavy).length;
-  return{wdays:days.length-heavy,heavy,total:days.length};
+  const clinic=days.filter(isClinicHol).length;
+  return{wdays:days.length-heavy,heavy,clinic,total:days.length};
 }
 
-let doctors=[
-  {name:'坂元', color:COLORS[0], canTochoku:true, canOncall:true,  role:'senior',
-   tWMin:0,tWMax:1, tHMin:0,tHMax:0, ocWMin:4,ocWMax:5, ocHMin:1,ocHMax:1, tBias:99,ocBias:0},
-  {name:'上西', color:COLORS[1], canTochoku:true, canOncall:false, role:'arrhythmia',
-   tWMin:2,tWMax:2, tHMin:1,tHMax:1, ocWMin:0,ocWMax:0, ocHMin:0,ocHMax:0, tBias:2, ocBias:99},
-  {name:'舟田', color:COLORS[2], canTochoku:true, canOncall:true,  role:'senior',
-   tWMin:1,tWMax:2, tHMin:0,tHMax:1, ocWMin:3,ocWMax:5, ocHMin:1,ocHMax:1, tBias:1, ocBias:1},
-  {name:'大沼', color:COLORS[3], canTochoku:true, canOncall:false, role:'arrhythmia',
-   tWMin:2,tWMax:2, tHMin:1,tHMax:1, ocWMin:0,ocWMax:0, ocHMin:0,ocHMax:0, tBias:2, ocBias:99},
-  {name:'山崎', color:COLORS[4], canTochoku:true, canOncall:true,  role:'mid',
-   tWMin:2,tWMax:3, tHMin:0,tHMax:1, ocWMin:3,ocWMax:4, ocHMin:1,ocHMax:1, tBias:3, ocBias:2},
-  {name:'坂下', color:COLORS[5], canTochoku:true, canOncall:true,  role:'mid',
-   tWMin:2,tWMax:3, tHMin:0,tHMax:1, ocWMin:3,ocWMax:4, ocHMin:1,ocHMax:1, tBias:3, ocBias:2},
-  {name:'豊崎', color:COLORS[6], canTochoku:true, canOncall:true,  role:'mid',
-   tWMin:2,tWMax:3, tHMin:0,tHMax:1, ocWMin:3,ocWMax:4, ocHMin:1,ocHMax:1, tBias:3, ocBias:2},
-  {name:'岸田', color:COLORS[7], canTochoku:true, canOncall:true,  role:'junior',
-   tWMin:2,tWMax:3, tHMin:0,tHMax:1, ocWMin:2,ocWMax:3, ocHMin:1,ocHMax:1, tBias:4, ocBias:3},
-  {name:'太田', color:COLORS[8], canTochoku:true, canOncall:false, role:'arrhythmia',
-   tWMin:2,tWMax:3, tHMin:1,tHMax:1, ocWMin:0,ocWMax:0, ocHMin:0,ocHMax:0, tBias:4, ocBias:99},
-  {name:'松本', color:COLORS[9], canTochoku:true, canOncall:true,  role:'junior',
-   tWMin:2,tWMax:3, tHMin:0,tHMax:1, ocWMin:2,ocWMax:3, ocHMin:1,ocHMax:1, tBias:4, ocBias:3},
-  {name:'八田', color:COLORS[10],canTochoku:true, canOncall:false, role:'visiting',
-   tWMin:0,tWMax:0, tHMin:2,tHMax:2, ocWMin:0,ocWMax:0, ocHMin:0,ocHMax:0, tBias:99,ocBias:99},
-];
+// =====================
+// NAVIGATION
+// =====================
+function switchPage(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.getElementById('nav-'+page).classList.add('active');
 
-let monthConfig={};
-let holidays={};
-doctors.forEach(d=>{holidays[d.name]={}});
-let schedule={};
-let _tW={},_tH={},_ocW={},_ocH={};
-
-// 初期月を現在の翌月に設定
-const now=new Date();
-const initY=now.getMonth()===11?now.getFullYear()+1:now.getFullYear();
-const initM=now.getMonth()===11?1:now.getMonth()+2;
-document.getElementById('target-month').value=`${initY}-${String(initM).padStart(2,'0')}`;
-
-function updateMonthInfoBoxes(){
-  const days=getDays();
-  if(!days.length)return;
-  const{wdays,heavy}=getMonthDayCounts();
-  const m=document.getElementById('target-month').value;
-  const txt=`<strong>${m}</strong>　平日 <strong>${wdays}日</strong>　土日・重祝日 <strong>${heavy}日</strong>`;
-  ['month-info-monthly','month-info-config'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML=txt});
+  // Render on switch
+  if(page==='members')renderMembers();
+  if(page==='roles')renderRoles();
+  if(page==='count-config')renderCountConfig();
+  if(page==='monthly'){renderHolType();renderVisitingWeek();renderPrevMonth();}
+  if(page==='count-monthly')renderMonthlyCount();
+  if(page==='holidays')renderHolidays();
+  if(page==='slots')renderSlots();
+  if(page==='generate')renderPreCheck();
 }
 
-function onMonthChange(){
-  visitingWeekSelected={};
-  computeMonthConfig();
-  renderHolType();
-  renderVisitingWeek();
-  renderPreCheck();
-  updateMonthInfoBoxes();
-}
-
-function computeMonthConfig(){
-  monthConfig={};
-  doctors.forEach(d=>{
-    monthConfig[d.name]={
-      tW:Math.round((d.tWMin+d.tWMax)/2),
-      tH:Math.round((d.tHMin+d.tHMax)/2),
-      ocW:Math.round((d.ocWMin+d.ocWMax)/2),
-      ocH:Math.round((d.ocHMin+d.ocHMax)/2),
-    };
-  });
-  renderConfig();
-  updateSums();
-}
-
-function getVisitingHeavyDays(){
-  return doctors.filter(d=>d.role==='visiting').reduce((s,d)=>s+(monthConfig[d.name]?.tH||0),0);
-}
-
-function updateSums(){
-  const days=getDays();if(!days.length)return;
-  const{wdays,heavy}=getMonthDayCounts();
-  const visitingHeavy=getVisitingHeavyDays();
-  const needOcH=heavy+visitingHeavy;
-  const sums={tW:0,tH:0,ocW:0,ocH:0};
-  doctors.forEach(d=>{Object.keys(sums).forEach(k=>sums[k]+=(monthConfig[d.name]?.[k]||0))});
-  const color=(s,n)=>s===n?'#166534':s>n?'#b91c1c':'#b45309';
-  const needMap={tW:wdays,tH:heavy,ocW:wdays,ocH:needOcH};
-  Object.entries(needMap).forEach(([k,need])=>{
-    const el=document.getElementById('sum-'+k);
-    if(el){el.textContent=sums[k];el.style.color=color(sums[k],need);}
-    const nel=document.getElementById('need-'+k);
-    if(nel)nel.textContent=need;
-  });
-  const tTotal=sums.tW+sums.tH;
-  const ocTotal=sums.ocW+sums.ocH;
-  const needT=wdays+heavy;
-  const needOc=wdays+needOcH;
-  const elT=document.getElementById('sum-tTotal');if(elT){elT.textContent=tTotal;elT.style.color=color(tTotal,needT);}
-  const elO=document.getElementById('sum-ocTotal');if(elO){elO.textContent=ocTotal;elO.style.color=color(ocTotal,needOc);}
-  const elNT=document.getElementById('need-tTotal');if(elNT)elNT.textContent=needT;
-  const elNO=document.getElementById('need-ocTotal');if(elNO)elNO.textContent=needOc;
-  renderConfig();
-}
-
-function renderConfig(){
-  const tbody=document.getElementById('cfg-body');if(!tbody)return;
-  tbody.innerHTML=doctors.map(d=>{
-    const cfg=monthConfig[d.name]||{tW:0,tH:0,ocW:0,ocH:0};
-    const disT=!d.canTochoku;const disO=!d.canOncall;
-    const tTotal=(cfg.tW||0)+(cfg.tH||0);
-    const ocTotal=(cfg.ocW||0)+(cfg.ocH||0);
+// =====================
+// MEMBERS
+// =====================
+function renderMembers(){
+  const tbody=document.getElementById('member-tbody');
+  tbody.innerHTML=fixedConfig.members.map((m,i)=>{
+    const role=getRoleById(m.roleId);
+    const color=getMemberColor(m);
     return`<tr>
-      <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d.color};margin-right:5px"></span><span class="name-tag hoverable" onmouseenter="highlightDoctor('${d.name}')" onmouseleave="highlightDoctor(null)">${d.name}</span></td>
-      <td><input type="number" min="0" max="15" value="${cfg.tW}" onchange="updateConfig('${d.name}','tW',this.value)" ${disT?'disabled style="opacity:.3"':''}></td>
-      <td><input type="number" min="0" max="15" value="${cfg.tH}" onchange="updateConfig('${d.name}','tH',this.value)" ${disT?'disabled style="opacity:.3"':''}></td>
-      <td><input type="number" min="0" max="15" value="${cfg.ocW}" onchange="updateConfig('${d.name}','ocW',this.value)" ${disO?'disabled style="opacity:.3"':''}></td>
-      <td><input type="number" min="0" max="15" value="${cfg.ocH}" onchange="updateConfig('${d.name}','ocH',this.value)" ${disO?'disabled style="opacity:.3"':''}></td>
-      <td style="font-weight:600;color:#333">${tTotal}</td>
-      <td style="font-weight:600;color:#333">${ocTotal}</td>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span><strong>${m.name}</strong></td>
+      <td><span class="tag" style="background:${color}20;color:${color}">${role?.name||m.roleId}</span></td>
+      <td style="text-align:center">${m.canTochoku?'✅':'—'}</td>
+      <td style="text-align:center">${m.canOncall?'✅':'—'}</td>
+      <td><button class="btn-icon" onclick="deleteMember(${i})" title="削除">🗑</button></td>
+    </tr>`;
+  }).join('');
+
+  // NG pairs
+  renderNGPairs();
+  renderSpecialConditions();
+}
+
+function deleteMember(i){
+  if(!confirm(`${fixedConfig.members[i].name}を削除しますか？`))return;
+  fixedConfig.members.splice(i,1);
+  renderMembers();
+}
+
+function renderNGPairs(){
+  const el=document.getElementById('ng-pairs-list');
+  if(!fixedConfig.ngPairs.length){el.innerHTML='<div style="font-size:13px;color:var(--text-3)">NGペアなし</div>';return;}
+  el.innerHTML=fixedConfig.ngPairs.map((pair,i)=>{
+    const m1=getMemberById(pair[0]);const m2=getMemberById(pair[1]);
+    return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span class="tag tag-red">${m1?.name||pair[0]}</span>
+      <span style="font-size:12px;color:var(--text-3)">×</span>
+      <span class="tag tag-red">${m2?.name||pair[1]}</span>
+      <span style="font-size:12px;color:var(--text-2)">は同日NG</span>
+      <button class="btn-icon" style="margin-left:auto" onclick="deleteNGPair(${i})">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+function deleteNGPair(i){fixedConfig.ngPairs.splice(i,1);renderNGPairs();}
+
+function renderSpecialConditions(){
+  const el=document.getElementById('special-conditions-list');
+  const typeLabels={oncall2:'当直時はoncall2人必要',visiting:'外勤（土日2連続当直）',groupOncall:'当直時は特定グループからoncall'};
+  if(!fixedConfig.specialConditions.length){el.innerHTML='<div style="font-size:13px;color:var(--text-3)">特殊条件なし</div>';return;}
+  el.innerHTML=fixedConfig.specialConditions.map((c,i)=>{
+    const m=getMemberById(c.memberId);
+    const g=c.groupId?getRoleById(c.groupId):null;
+    const color=m?getMemberColor(m):'#888';
+    return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span class="tag" style="background:${color}20;color:${color}">${m?.name||c.memberId}</span>
+      <span style="font-size:12px;color:var(--text-2)">${typeLabels[c.type]||c.type}${g?'（'+g.name+'）':''}</span>
+      <button class="btn-icon" style="margin-left:auto" onclick="deleteSpecial(${i})">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+function deleteSpecial(i){fixedConfig.specialConditions.splice(i,1);renderSpecialConditions();}
+
+// =====================
+// ROLES
+// =====================
+function renderRoles(){
+  const el=document.getElementById('roles-list');
+  el.innerHTML=fixedConfig.roles.map((r,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span class="dot" style="background:${r.color};width:12px;height:12px"></span>
+      <strong style="font-size:13px">${r.name}</strong>
+      <span style="font-size:12px;color:var(--text-3);margin-left:4px">
+        ${fixedConfig.members.filter(m=>m.roleId===r.id).map(m=>m.name).join('・')||'メンバーなし'}
+      </span>
+      <button class="btn-icon" style="margin-left:auto" onclick="deleteRole('${r.id}')">🗑</button>
+    </div>`).join('');
+}
+
+function deleteRole(id){
+  if(fixedConfig.members.some(m=>m.roleId===id)){alert('このグループに所属するメンバーがいます。先にメンバーのグループを変更してください。');return;}
+  fixedConfig.roles=fixedConfig.roles.filter(r=>r.id!==id);
+  renderRoles();
+}
+
+// =====================
+// SLOTS
+// =====================
+function renderSlots(){
+  renderSlotList('weekday');
+  renderSlotList('holiday');
+}
+function renderSlotList(type){
+  const el=document.getElementById(type+'-slots');
+  const slots=fixedConfig.slots[type];
+  el.innerHTML=slots.map((s,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <input type="text" value="${s.name}" onchange="updateSlot('${type}',${i},'name',this.value)" style="width:120px">
+      <span style="font-size:13px;color:var(--text-2)">必要人数：</span>
+      <input type="number" value="${s.count}" min="1" max="10" onchange="updateSlot('${type}',${i},'count',+this.value)" style="width:60px">
+      <span style="font-size:13px;color:var(--text-2)">人</span>
+      <button class="btn-icon" onclick="deleteSlot('${type}',${i})">🗑</button>
+    </div>`).join('');
+}
+function addSlot(type){fixedConfig.slots[type].push({name:'新しい枠',count:1});renderSlots();}
+function updateSlot(type,i,key,val){fixedConfig.slots[type][i][key]=val;}
+function deleteSlot(type,i){fixedConfig.slots[type].splice(i,1);renderSlots();}
+
+// =====================
+// COUNT CONFIG
+// =====================
+function renderCountConfig(){
+  const tbody=document.getElementById('count-config-tbody');
+  tbody.innerHTML=fixedConfig.members.map(m=>{
+    const color=getMemberColor(m);
+    const role=getRoleById(m.roleId);
+    return`<tr>
+      <td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>${m.name}
+        <span class="tag" style="background:${color}20;color:${color};margin-left:4px">${role?.name||''}</span>
+      </td>
+      ${['tWMin','tWMax','tHMin','tHMax','ocWMin','ocWMax','ocHMin','ocHMax'].map(f=>`
+        <td><input type="number" min="0" max="15" value="${m[f]||0}" onchange="updateMemberCount('${m.id}','${f}',+this.value)" ${(!m.canTochoku&&(f.startsWith('tW')||f.startsWith('tH')))||(!m.canOncall&&f.startsWith('oc'))?'disabled style="opacity:.3"':''}></td>
+      `).join('')}
     </tr>`;
   }).join('');
 }
 
-function updateConfig(name,field,val){
-  if(!monthConfig[name])monthConfig[name]={tW:0,tH:0,ocW:0,ocH:0};
-  monthConfig[name][field]=parseInt(val)||0;
-  updateSums();
+function updateMemberCount(id,field,val){
+  const m=fixedConfig.members.find(m=>m.id===id);
+  if(m)m[field]=val;
 }
 
-function validateConfig(){
+// =====================
+// MONTHLY SETTINGS
+// =====================
+function onMonthChange(){
   const days=getDays();
-  if(!days.length){document.getElementById('config-warn').innerHTML='<div class="warn">対象月を選択してください</div>';return}
-  const{wdays,heavy}=getMonthDayCounts();
-  const sums={tW:0,tH:0,ocW:0,ocH:0};
-  doctors.forEach(d=>{Object.keys(sums).forEach(k=>sums[k]+=(monthConfig[d.name]?.[k]||0))});
-  const visitingHeavy=getVisitingHeavyDays();
-  const needs={tW:wdays,tH:heavy,ocW:wdays,ocH:heavy+visitingHeavy};
-  const labels={tW:'平日当直',tH:'休日当直',ocW:'平日oncall',ocH:'休日oncall'};
-  const diffs=Object.entries(needs).map(([k,need])=>{
-    const diff=sums[k]-need;
-    if(diff>0)return`<span style="color:#b91c1c;font-weight:500">▲ ${labels[k]} ${diff}多い</span>`;
-    if(diff<0)return`<span style="color:#b45309;font-weight:500">▼ ${labels[k]} ${Math.abs(diff)}少ない</span>`;
-    return null;
-  }).filter(Boolean);
-
-  const el=document.getElementById('config-warn');
-  if(diffs.length){
-    el.innerHTML=`<div class="warn">${diffs.join('　')}</div>`;
-  } else {
-    el.innerHTML=`<div class="ok">✓ 合計が一致しています（平日${wdays}日・休日${heavy}日）</div>`;
-  }
-}
-
-function switchTab(t){
-  const tabs=['members','monthly','config','holidays','generate'];
-  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',tabs[i]===t));
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById('tab-'+t).classList.add('active');
-  if(t==='monthly'){renderHolType();renderVisitingWeek();updateMonthInfoBoxes();}
-  if(t==='config'){
-    if(Object.keys(monthConfig).length===0)computeMonthConfig();
-    else{renderConfig();updateSums();}
-    updateMonthInfoBoxes();
-  }
-  if(t==='holidays')renderHolidays();
-  if(t==='generate')renderPreCheck();
-}
-
-function toggleCan(i,field){doctors[i][field]=!doctors[i][field];renderDoctors()}
-
-function renderDoctors(){
-  const el=document.getElementById('dr-list');
-  el.innerHTML=doctors.map((d,i)=>`
-    <div class="dr-row">
-      <div class="dot" style="background:${d.color}"></div>
-      <span style="font-weight:600;font-size:14px;min-width:38px">${d.name}</span>
-      <label class="cb-label"><input type="checkbox" ${d.canTochoku?'checked':''} onchange="toggleCan(${i},'canTochoku')">当直可</label>
-      <label class="cb-label"><input type="checkbox" ${d.canOncall?'checked':''} onchange="toggleCan(${i},'canOncall')">oncall可</label>
-    </div>`).join('');
+  if(!days.length)return;
+  const{wdays,heavy,clinic}=getMonthDayCounts();
+  document.getElementById('stat-weekdays').textContent=wdays;
+  document.getElementById('stat-heavy').textContent=heavy;
+  document.getElementById('stat-clinic').textContent=clinic;
+  document.getElementById('month-stat').style.display='grid';
+  // 月次設定を読み込み（新しい月なら初期化）
+  loadMonthlyConfig();
+  renderHolType();
+  renderVisitingWeek();
+  renderPrevMonth();
+  renderMonthlyCount();
 }
 
 function renderHolType(){
-  const days=getDays();const holDays=days.filter(isHol);
+  const days=getDays();
+  const holDays=days.filter(isHol);
   const el=document.getElementById('hol-type-area');
-  if(!holDays.length){el.innerHTML='<p style="font-size:13px;color:#888">この月に祝日はありません</p>';return}
+  if(!holDays.length){el.innerHTML='<span style="font-size:13px;color:var(--text-3)">この月に祝日はありません</span>';return;}
   el.innerHTML=holDays.map(day=>{
-    const heavy=isHeavyHol(day);const date=new Date(day+'T00:00:00');
-    return`<button class="hol-toggle ${heavy?'is-heavy':'is-light'}" onclick="toggleHolType('${day}')">
-      <span style="font-size:10px;font-weight:600">${heavy?'土日扱':'診療'}</span>
-      <span>${date.getMonth()+1}/${date.getDate()}(${dowLabel(day)})</span>
+    const heavy=isHeavyHol(day);
+    const date=new Date(day+'T00:00:00');
+    return`<button class="hol-btn ${heavy?'heavy':'clinic'}" onclick="toggleHolType('${day}')">
+      <span style="font-size:10px;font-weight:700">${heavy?'土日扱':'診療'}</span>
+      ${date.getMonth()+1}/${date.getDate()}(${dowLabel(day)})
     </button>`;
   }).join('');
 }
-function toggleHolType(day){holTypeOverrides[day]=!isHeavyHol(day);renderHolType()}
+function toggleHolType(day){holTypeOverrides[day]=!isHeavyHol(day);renderHolType();saveMonthlyConfig();}
 
 function renderVisitingWeek(){
-  const el=document.getElementById('visiting-week-area');
-  const vis=doctors.filter(d=>d.role==='visiting');
+  const visiting=fixedConfig.specialConditions.filter(c=>c.type==='visiting');
+  const el=document.getElementById('visiting-config');
+  if(!visiting.length){el.style.display='none';return;}
+  el.style.display='block';
   const pairs=getWeekendPairs();
-  if(!pairs.length){el.innerHTML='<p style="font-size:13px;color:#888">対象月を選択してください</p>';return}
-  el.innerHTML=vis.map(vd=>{
-    const sel=visitingWeekSelected[vd.name];
+  const area=document.getElementById('visiting-week-area');
+  area.innerHTML=visiting.map(c=>{
+    const m=getMemberById(c.memberId);
+    if(!m)return'';
+    const sel=visitingWeekSelected[m.id];
     const sp=sel?pairs.find(p=>p.sat===sel):null;
-    return`<div style="margin-bottom:.75rem">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <div class="dot" style="background:${vd.color}"></div>
-        <span style="font-weight:600;font-size:14px">${vd.name}先生</span>
-        <span style="font-size:12px;color:#888">${sp?`→ ${new Date(sp.sat+'T00:00:00').getDate()}日(土)${sp.sun?'・'+new Date(sp.sun+'T00:00:00').getDate()+'日(日)':''}に割り当て`:'→ 未選択（月末土日に自動設定）'}</span>
+    return`<div style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${getMemberColor(m)}"></span>
+        <strong style="font-size:13px">${m.name}先生</strong>
+        <span style="font-size:12px;color:var(--text-3)">${sp?`→ ${new Date(sp.sat+'T00:00:00').getDate()}日(土)${sp.sun?'・'+new Date(sp.sun+'T00:00:00').getDate()+'日(日)':''}に割り当て`:'→ 未選択（月末土日に自動設定）'}</span>
       </div>
-      ${pairs.map(p=>`
-        <div class="week-block${sel===p.sat?' selected':''}" onclick="selectVisitingWeek('${vd.name}','${p.sat}')">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-size:13px;font-weight:${sel===p.sat?'600':'400'}">${new Date(p.sat+'T00:00:00').getDate()}日(土)${p.sun?'・'+new Date(p.sun+'T00:00:00').getDate()+'日(日)':''}</span>
-            <span style="font-size:11px;color:#6366f1">${sel===p.sat?'✓ 選択中':''}</span>
-          </div>
-          <div style="display:flex;gap:4px">
-            <span class="wd-chip sat">${new Date(p.sat+'T00:00:00').getDate()}(土)</span>
-            ${p.sun?`<span class="wd-chip sun">${new Date(p.sun+'T00:00:00').getDate()}(日)</span>`:''}
-          </div>
-        </div>`).join('')}
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${pairs.map(p=>`<button class="week-block ${sel===p.sat?'selected':''}" onclick="selectVisitingWeek('${m.id}','${p.sat}')" style="padding:6px 12px">
+          ${new Date(p.sat+'T00:00:00').getDate()}日(土)${p.sun?'・'+new Date(p.sun+'T00:00:00').getDate()+'日(日)':''}
+          ${sel===p.sat?'<span style="font-size:11px;color:var(--accent);margin-left:4px">✓</span>':''}
+        </button>`).join('')}
+      </div>
     </div>`;
   }).join('');
 }
-function selectVisitingWeek(name,sat){
-  visitingWeekSelected[name]===sat?delete visitingWeekSelected[name]:visitingWeekSelected[name]=sat;
+function selectVisitingWeek(id,sat){
+  visitingWeekSelected[id]===sat?delete visitingWeekSelected[id]:visitingWeekSelected[id]=sat;
   renderVisitingWeek();
+  saveMonthlyConfig();
 }
 
-function cycleHol(btn){
-  const name=btn.dataset.name,day=btn.dataset.day;
-  if(!holidays[name])holidays[name]={};
-  const cur=holidays[name][day]||0,next=(cur+1)%3;
-  if(next===0)delete holidays[name][day];else holidays[name][day]=next;
-  btn.className='hbtn'+(next===1?' s1':next===2?' s2':'')+(isHeavy(day)?' we':'');
-  updateBadges(name,btn.closest('.card'));
+function renderPrevMonth(){
+  const el=document.getElementById('prev-month-card');
+  if(!document.getElementById('rule-prev-month').checked){el.style.display='none';return;}
+  const m=document.getElementById('target-month').value;
+  if(!m){el.style.display='none';return;}
+  el.style.display='block';
+  const[y,mo]=m.split('-').map(Number);
+  const prevMonthEnd=new Date(y,mo-1,0);
+  const inputs=document.getElementById('prev-month-inputs');
+  const prevDays=[];
+  for(let i=3;i>=0;i--){
+    const d=new Date(prevMonthEnd);d.setDate(d.getDate()-i);
+    prevDays.push(d.toISOString().slice(0,10));
+  }
+  inputs.innerHTML=prevDays.map(day=>{
+    const date=new Date(day+'T00:00:00');
+    return`<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;min-width:80px">${date.getMonth()+1}/${date.getDate()}(${dowLabel(day)})</span>
+      <select onchange="setPrevTochoku('${day}',this.value)" style="width:120px">
+        <option value="">—（なし）</option>
+        ${fixedConfig.members.map(m=>`<option value="${m.id}" ${prevMonthTochoku[day]===m.id?'selected':''}>${m.name}</option>`).join('')}
+      </select>
+    </div>`;
+  }).join('');
 }
-function updateBadges(name,card){
-  if(!card)return;
-  const vals=Object.values(holidays[name]||{});
-  const offC=vals.filter(v=>v===1).length,oncC=vals.filter(v=>v===2).length;
-  const ba=card.querySelector('.badge-area');if(!ba)return;
-  ba.innerHTML=(offC?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#E24B4A;color:#fff">休み ${offC}日</span>`:'')
-    +(oncC?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#EF9F27;color:#fff">oncallのみ ${oncC}日</span>`:'');
+function setPrevTochoku(day,id){if(id)prevMonthTochoku[day]=id;else delete prevMonthTochoku[day];saveMonthlyConfig();}
+
+// =====================
+// MONTHLY COUNT
+// =====================
+function renderMonthlyCount(){
+  const m=document.getElementById('target-month').value;
+  const infoEl=document.getElementById('monthly-count-info');
+  if(!m){infoEl.textContent='対象月を選択すると推奨回数が自動計算されます。';return;}
+  const{wdays,heavy}=getMonthDayCounts();
+  const visitingH=fixedConfig.specialConditions.filter(c=>c.type==='visiting').reduce((s,c)=>{
+    const mem=getMemberById(c.memberId);return s+(mem?mem.tHMin||0:0);
+  },0);
+  const needOcH=heavy+visitingH;
+  infoEl.innerHTML=`<strong>${m}</strong>　平日 <strong>${wdays}日</strong>　土日・重祝日 <strong>${heavy}日</strong>　休日oncall必要数 <strong>${needOcH}</strong>`;
+
+  // monthlyConfigを初期化（未設定の場合のみ）
+  fixedConfig.members.forEach(mem=>{
+    if(!monthlyConfig[mem.id]){
+      monthlyConfig[mem.id]={
+        tW:Math.round((mem.tWMin+mem.tWMax)/2),
+        tH:Math.round((mem.tHMin+mem.tHMax)/2),
+        ocW:Math.round((mem.ocWMin+mem.ocWMax)/2),
+        ocH:Math.round((mem.ocHMin+mem.ocHMax)/2),
+      };
+    }
+  });
+
+  const tbody=document.getElementById('monthly-count-tbody');
+  tbody.innerHTML=fixedConfig.members.map(mem=>{
+    const cfg=monthlyConfig[mem.id]||{tW:0,tH:0,ocW:0,ocH:0};
+    const color=getMemberColor(mem);
+    const tc=(cfg.tW||0)+(cfg.tH||0);
+    const oc=(cfg.ocW||0)+(cfg.ocH||0);
+    const inp=(field,disabled)=>`<input type="number" min="0" max="15" value="${cfg[field]||0}" onchange="updateMonthlyCfg('${mem.id}','${field}',+this.value)" style="width:46px" ${disabled?'disabled style="opacity:.3"':''}>`;
+    return`<tr>
+      <td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>${mem.name}</td>
+      <td>${inp('tW',!mem.canTochoku)}</td>
+      <td>${inp('tH',!mem.canTochoku)}</td>
+      <td style="font-weight:600">${tc}</td>
+      <td>${inp('ocW',!mem.canOncall)}</td>
+      <td>${inp('ocH',!mem.canOncall)}</td>
+      <td style="font-weight:600">${oc}</td>
+    </tr>`;
+  }).join('');
+
+  updateMonthlySums();
 }
 
+function updateMonthlyCfg(id,field,val){
+  if(!monthlyConfig[id])monthlyConfig[id]={tW:0,tH:0,ocW:0,ocH:0};
+  monthlyConfig[id][field]=val;
+  updateMonthlySums();
+  saveMonthlyConfig();
+  // 合計列を更新
+  const rows=document.querySelectorAll('#monthly-count-tbody tr');
+  fixedConfig.members.forEach((mem,i)=>{
+    const cfg=monthlyConfig[mem.id]||{};
+    const tc=(cfg.tW||0)+(cfg.tH||0);
+    const oc=(cfg.ocW||0)+(cfg.ocH||0);
+    if(rows[i]){
+      rows[i].cells[3].textContent=tc;
+      rows[i].cells[6].textContent=oc;
+    }
+  });
+}
+
+function updateMonthlySums(){
+  const{wdays,heavy}=getMonthDayCounts();
+  const visitingH=fixedConfig.specialConditions.filter(c=>c.type==='visiting').reduce((s,c)=>{
+    const mem=getMemberById(c.memberId);return s+(monthlyConfig[mem?.id]?.tH||0);
+  },0);
+  const needOcH=heavy+visitingH;
+
+  const sums={tW:0,tH:0,ocW:0,ocH:0};
+  fixedConfig.members.forEach(m=>{
+    Object.keys(sums).forEach(k=>sums[k]+=(monthlyConfig[m.id]?.[k]||0));
+  });
+  const tc=sums.tW+sums.tH;
+  const oc=sums.ocW+sums.ocH;
+
+  const color=(s,n)=>s===n?'var(--success)':s>n?'var(--danger)':'var(--warn)';
+  const setCell=(id,val,need)=>{
+    const el=document.getElementById(id);
+    if(el){el.textContent=val;el.style.color=color(val,need);}
+  };
+  setCell('sum-tw',sums.tW,wdays);setCell('sum-th',sums.tH,heavy);setCell('sum-tc',tc,wdays+heavy);
+  setCell('sum-ow',sums.ocW,wdays);setCell('sum-oh',sums.ocH,needOcH);setCell('sum-oc',oc,wdays+needOcH);
+  ['need-tw','need-ow'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=wdays});
+  ['need-th'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=heavy});
+  const nte=document.getElementById('need-tc');if(nte)nte.textContent=wdays+heavy;
+  const noe=document.getElementById('need-oh');if(noe)noe.textContent=needOcH;
+  const noce=document.getElementById('need-oc');if(noce)noce.textContent=wdays+needOcH;
+}
+
+function validateMonthlyCount(){
+  const{wdays,heavy}=getMonthDayCounts();
+  const visitingH=fixedConfig.specialConditions.filter(c=>c.type==='visiting').reduce((s,c)=>{
+    const mem=getMemberById(c.memberId);return s+(monthlyConfig[mem?.id]?.tH||0);
+  },0);
+  const needOcH=heavy+visitingH;
+  const sums={tW:0,tH:0,ocW:0,ocH:0};
+  fixedConfig.members.forEach(m=>{Object.keys(sums).forEach(k=>sums[k]+=(monthlyConfig[m.id]?.[k]||0))});
+  const labels={tW:'平日当直',tH:'休日当直',ocW:'平日oncall',ocH:'休日oncall'};
+  const needs={tW:wdays,tH:heavy,ocW:wdays,ocH:needOcH};
+  const diffs=Object.entries(needs).map(([k,need])=>{
+    const diff=sums[k]-need;
+    if(diff>0)return`<span style="color:var(--danger);font-weight:500">▲ ${labels[k]} ${diff}多い</span>`;
+    if(diff<0)return`<span style="color:var(--warn);font-weight:500">▼ ${labels[k]} ${Math.abs(diff)}少ない</span>`;
+    return null;
+  }).filter(Boolean);
+  const el=document.getElementById('monthly-count-warn');
+  el.innerHTML=diffs.length
+    ?`<div class="warn-box">${diffs.join('　')}</div>`
+    :`<div class="success-box">✓ 合計が一致しています</div>`;
+}
+
+// =====================
+// HOLIDAYS
+// =====================
 function renderHolidays(){
-  const el=document.getElementById('holiday-panel');
   const days=getDays();
-  if(!days.length){el.innerHTML='<div class="warn">対象月を選択してください</div>';return}
-  el.innerHTML=doctors.filter(d=>d.role!=='visiting').map(d=>{
-    if(!holidays[d.name])holidays[d.name]={};
-    const vals=Object.values(holidays[d.name]);
-    const offC=vals.filter(v=>v===1).length,oncC=vals.filter(v=>v===2).length;
-    const btns=days.map(day=>{
-      const st=holidays[d.name][day]||0;
-      const lbl=new Date(day+'T00:00:00').getDate()+'('+dowLabel(day)+(isHol(day)?'祝':'')+')';
-      return`<button class="hbtn${st===1?' s1':st===2?' s2':''}${isHeavy(day)?' we':''}" data-name="${d.name}" data-day="${day}" onclick="cycleHol(this)">${lbl}</button>`;
+  const el=document.getElementById('holiday-panel');
+  if(!days.length){el.innerHTML='<div class="warn-box">対象月を選択してください</div>';return;}
+  el.innerHTML=fixedConfig.members.filter(m=>!fixedConfig.specialConditions.some(c=>c.type==='visiting'&&c.memberId===m.id)).map(mem=>{
+    if(!holidays[mem.id])holidays[mem.id]={};
+    const color=getMemberColor(mem);
+    const vals=Object.values(holidays[mem.id]);
+    const offC=vals.filter(v=>v===1).length;
+    const onC=vals.filter(v=>v===2).length;
+    const chips=days.map(day=>{
+      const st=holidays[mem.id][day]||0;
+      const d=new Date(day+'T00:00:00');
+      const lbl=d.getDate()+'('+dowLabel(day)+(isHol(day)?'祝':'')+')';
+      return`<span class="day-chip ${st===1?'off':st===2?'oncall-only':''}${isHeavy(day)?' we':''}"
+        onclick="cycleHol('${mem.id}','${day}',this)">${lbl}</span>`;
     }).join('');
-    return`<div class="card">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-        <div class="dot" style="background:${d.color}"></div>
-        <span style="font-weight:600;font-size:14px">${d.name}</span>
+    return`<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color}"></span>
+        <strong style="font-size:13px">${mem.name}</strong>
         <span class="badge-area" style="display:flex;gap:4px;flex-wrap:wrap">
-          ${offC?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#E24B4A;color:#fff">休み ${offC}日</span>`:''}
-          ${oncC?`<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:#EF9F27;color:#fff">oncallのみ ${oncC}日</span>`:''}
+          ${offC?`<span class="tag tag-red">休み ${offC}日</span>`:''}
+          ${onC?`<span class="tag tag-orange">oncallのみ ${onC}日</span>`:''}
         </span>
       </div>
-      <div class="hgrid">${btns}</div>
+      <div class="chip-grid">${chips}</div>
     </div>`;
   }).join('');
 }
 
-function renderPreCheck(){
+function cycleHol(memberId,day,el){
+  if(!holidays[memberId])holidays[memberId]={};
+  const cur=holidays[memberId][day]||0;
+  const next=(cur+1)%3;
+  if(next===0)delete holidays[memberId][day];else holidays[memberId][day]=next;
+  el.className='day-chip '+(next===1?'off':next===2?'oncall-only':'')+(isHeavy(day)?' we':'');
+  // バッジ更新
+  renderHolidays();
+}
+
+// =====================
+// MODALS
+// =====================
+function openAddMemberModal(){
+  const sel=document.getElementById('new-member-role');
+  sel.innerHTML=fixedConfig.roles.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  document.getElementById('new-member-name').value='';
+  openModal('modal-member');
+}
+function addMember(){
+  const name=document.getElementById('new-member-name').value.trim();
+  if(!name){alert('名前を入力してください');return;}
+  const roleId=document.getElementById('new-member-role').value;
+  const canTochoku=document.getElementById('new-member-can-tochoku').checked;
+  const canOncall=document.getElementById('new-member-can-oncall').checked;
+  const id='m_'+Date.now();
+  fixedConfig.members.push({id,name,roleId,canTochoku,canOncall,tWMin:0,tWMax:3,tHMin:0,tHMax:1,ocWMin:0,ocWMax:5,ocHMin:0,ocHMax:1});
+  holidays[id]={};
+  closeModal('modal-member');
+  renderMembers();
+}
+
+function openAddRoleModal(){
+  const picker=document.getElementById('role-color-picker');
+  picker.innerHTML=ROLE_COLORS.map((c,i)=>`
+    <span style="width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;display:inline-block;border:2px solid transparent"
+      id="color-opt-${i}" onclick="selectRoleColor('${c}',${i})"></span>`).join('');
+  document.getElementById('new-role-name').value='';
+  window._selectedRoleColor=ROLE_COLORS[0];
+  openModal('modal-role');
+}
+function selectRoleColor(c,i){
+  window._selectedRoleColor=c;
+  document.querySelectorAll('[id^=color-opt-]').forEach(el=>el.style.border='2px solid transparent');
+  document.getElementById('color-opt-'+i).style.border='2px solid #333';
+}
+function addRole(){
+  const name=document.getElementById('new-role-name').value.trim();
+  if(!name){alert('グループ名を入力してください');return;}
+  const id='role_'+Date.now();
+  fixedConfig.roles.push({id,name,color:window._selectedRoleColor||ROLE_COLORS[0]});
+  closeModal('modal-role');
+  renderRoles();
+}
+
+function openAddNGModal(){
+  const opts=fixedConfig.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  document.getElementById('ng-member1').innerHTML=opts;
+  document.getElementById('ng-member2').innerHTML=opts;
+  openModal('modal-ng');
+}
+function addNGPair(){
+  const m1=document.getElementById('ng-member1').value;
+  const m2=document.getElementById('ng-member2').value;
+  if(m1===m2){alert('同じメンバーは選べません');return;}
+  if(fixedConfig.ngPairs.some(p=>(p[0]===m1&&p[1]===m2)||(p[0]===m2&&p[1]===m1))){alert('既に登録されています');return;}
+  fixedConfig.ngPairs.push([m1,m2]);
+  closeModal('modal-ng');
+  renderNGPairs();
+}
+
+function openAddSpecialModal(){
+  const opts=fixedConfig.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  document.getElementById('special-member').innerHTML=opts;
+  document.getElementById('special-group').innerHTML=fixedConfig.roles.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  document.getElementById('special-type').onchange=function(){
+    document.getElementById('special-group-field').style.display=this.value==='groupOncall'?'block':'none';
+  };
+  openModal('modal-special');
+}
+function addSpecialCondition(){
+  const memberId=document.getElementById('special-member').value;
+  const type=document.getElementById('special-type').value;
+  const groupId=type==='groupOncall'?document.getElementById('special-group').value:undefined;
+  fixedConfig.specialConditions.push({type,memberId,groupId});
+  closeModal('modal-special');
+  renderSpecialConditions();
+}
+
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open')});
+});
+
+// =====================
+// RULES (live update)
+// =====================
+document.getElementById('rule-interval').addEventListener('input',function(){
+  document.getElementById('rule-interval-display').textContent=+this.value+1;
+  fixedConfig.rules.interval=+this.value;
+});
+document.getElementById('rule-no-consecutive').addEventListener('change',function(){fixedConfig.rules.noConsecutive=this.checked});
+document.getElementById('rule-even-dist').addEventListener('change',function(){fixedConfig.rules.evenDist=this.checked});
+document.getElementById('rule-max-oncall-consec').addEventListener('change',function(){fixedConfig.rules.maxOncallConsec=+this.value});
+document.getElementById('rule-weekend-set').addEventListener('change',function(){fixedConfig.rules.weekendSet=this.checked});
+document.getElementById('rule-weekend-set2').addEventListener('change',function(){fixedConfig.rules.weekendSet2=this.checked});
+document.getElementById('rule-prev-month').addEventListener('change',function(){fixedConfig.rules.prevMonth=this.checked;renderPrevMonth();});
+
+// =====================
+// HOLIDAYS
+// =====================
+function renderHolidays(){
   const days=getDays();
-  if(!days.length){document.getElementById('pre-check').innerHTML='<p style="font-size:13px;color:#888">対象月を選択してください</p>';return}
-  const{wdays,heavy}=getMonthDayCounts();
-  const vis=doctors.filter(d=>d.role==='visiting');
-  const pairs=getWeekendPairs();
-  const visInfo=vis.map(vd=>{
-    const sat=visitingWeekSelected[vd.name];
-    if(!sat)return`${vd.name}（月末自動）`;
-    const p=pairs.find(p=>p.sat===sat);
-    return`${vd.name}（${new Date(sat+'T00:00:00').getDate()}日土・${p?.sun?new Date(p.sun+'T00:00:00').getDate()+'日日':''}）`;
+  const el=document.getElementById('holiday-panel');
+  if(!days.length){el.innerHTML='<div class="warn-box">対象月を選択してください</div>';return;}
+  const visitingIds=new Set(fixedConfig.specialConditions.filter(c=>c.type==='visiting').map(c=>c.memberId));
+  el.innerHTML=fixedConfig.members.filter(m=>!visitingIds.has(m.id)).map(mem=>{
+    if(!holidays[mem.id])holidays[mem.id]={};
+    const color=getMemberColor(mem);
+    const vals=Object.values(holidays[mem.id]);
+    const offC=vals.filter(v=>v===1).length;
+    const onC=vals.filter(v=>v===2).length;
+    const chips=days.map(day=>{
+      const st=holidays[mem.id][day]||0;
+      const d=new Date(day+'T00:00:00');
+      const lbl=d.getDate()+'('+dowLabel(day)+(isHol(day)?'祝':'')+')';
+      const cls='day-chip'+(st===1?' off':st===2?' oncall-only':'')+(isHeavy(day)?' we':'');
+      return`<span class="${cls}" onclick="cycleHol('${mem.id}','${day}',this)">${lbl}</span>`;
+    }).join('');
+    return`<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color}"></span>
+        <strong style="font-size:13px">${mem.name}</strong>
+        <span class="badge-area" style="display:flex;gap:4px;flex-wrap:wrap">
+          ${offC?`<span class="tag tag-red">休み ${offC}日</span>`:''}
+          ${onC?`<span class="tag tag-orange">oncallのみ ${onC}日</span>`:''}
+        </span>
+      </div>
+      <div class="chip-grid">${chips}</div>
+    </div>`;
+  }).join('');
+}
+
+function cycleHol(memberId,day,el){
+  if(!holidays[memberId])holidays[memberId]={};
+  const cur=holidays[memberId][day]||0;
+  const next=(cur+1)%3;
+  if(next===0)delete holidays[memberId][day];
+  else holidays[memberId][day]=next;
+  el.className='day-chip'+(next===1?' off':next===2?' oncall-only':'')+(isHeavy(day)?' we':'');
+  // バッジ更新
+  const card=el.closest('.card');
+  if(card){
+    const vals=Object.values(holidays[memberId]);
+    const offC=vals.filter(v=>v===1).length;
+    const onC=vals.filter(v=>v===2).length;
+    const badges=card.querySelector('.badge-area');
+    if(badges){
+      badges.innerHTML=(offC?`<span class="tag tag-red">休み ${offC}日</span>`:'')+
+        (onC?`<span class="tag tag-orange">oncallのみ ${onC}日</span>`:'');
+    }
+  }
+  saveMonthlyConfig();
+}
+
+// =====================
+// SAVE / LOAD
+// =====================
+
+// 月次設定キー
+function monthlyKey(){
+  const m=document.getElementById('target-month').value;
+  return m?`shiftmaker_monthly_${m}`:'shiftmaker_monthly_unknown';
+}
+
+// 月次設定を自動保存
+function saveMonthlyConfig(){
+  const m=document.getElementById('target-month').value;
+  if(!m)return;
+  try{
+    const data={
+      month:m,
+      holTypeOverrides,
+      visitingWeekSelected,
+      prevMonthTochoku,
+      monthlyConfig,
+      holidays,
+    };
+    localStorage.setItem(monthlyKey(),JSON.stringify(data));
+  }catch(e){console.error('月次設定の自動保存に失敗:',e);}
+}
+
+// 月次設定を読み込み
+function loadMonthlyConfig(){
+  const m=document.getElementById('target-month').value;
+  if(!m)return;
+  try{
+    const saved=localStorage.getItem(monthlyKey());
+    if(saved){
+      const data=JSON.parse(saved);
+      if(data.holTypeOverrides)Object.assign(holTypeOverrides,data.holTypeOverrides);
+      if(data.visitingWeekSelected)Object.assign(visitingWeekSelected,data.visitingWeekSelected);
+      if(data.prevMonthTochoku)Object.assign(prevMonthTochoku,data.prevMonthTochoku);
+      if(data.monthlyConfig)Object.assign(monthlyConfig,data.monthlyConfig);
+      if(data.holidays){
+        fixedConfig.members.forEach(mem=>{
+          if(data.holidays[mem.id])holidays[mem.id]=data.holidays[mem.id];
+        });
+      }
+    } else {
+      // 新しい月は初期化
+      Object.keys(holTypeOverrides).forEach(k=>delete holTypeOverrides[k]);
+      Object.keys(visitingWeekSelected).forEach(k=>delete visitingWeekSelected[k]);
+      Object.keys(prevMonthTochoku).forEach(k=>delete prevMonthTochoku[k]);
+      Object.keys(monthlyConfig).forEach(k=>delete monthlyConfig[k]);
+      fixedConfig.members.forEach(mem=>{holidays[mem.id]={};});
+    }
+  }catch(e){console.error('月次設定の読み込みに失敗:',e);}
+}
+
+function saveFixedConfig(){
+  try{
+    localStorage.setItem('shiftmaker_fixed',JSON.stringify(fixedConfig));
+    document.getElementById('save-label').textContent='保存しました ✓';
+    setTimeout(()=>document.getElementById('save-label').textContent='固定設定を保存済み',2000);
+  }catch(e){alert('保存に失敗しました: '+e.message);}
+}
+
+function loadFixedConfig(){
+  try{
+    const saved=localStorage.getItem('shiftmaker_fixed');
+    if(saved){
+      const parsed=JSON.parse(saved);
+      Object.assign(fixedConfig,parsed);
+      document.getElementById('rule-interval').value=fixedConfig.rules.interval||3;
+      document.getElementById('rule-interval-display').textContent=(fixedConfig.rules.interval||3)+1;
+      document.getElementById('rule-no-consecutive').checked=fixedConfig.rules.noConsecutive!==false;
+      document.getElementById('rule-even-dist').checked=fixedConfig.rules.evenDist!==false;
+      document.getElementById('rule-max-oncall-consec').value=fixedConfig.rules.maxOncallConsec||3;
+      document.getElementById('rule-weekend-set').checked=fixedConfig.rules.weekendSet!==false;
+      document.getElementById('rule-weekend-set2').checked=fixedConfig.rules.weekendSet2!==false;
+      document.getElementById('rule-prev-month').checked=fixedConfig.rules.prevMonth!==false;
+      document.getElementById('save-label').textContent='保存済み設定を読み込みました';
+    }
+  }catch(e){console.error(e);}
+  fixedConfig.members.forEach(m=>{if(!holidays[m.id])holidays[m.id]={}});
+}
+
+// =====================
+// PHASE 2: SHIFT GENERATION
+// =====================
+
+let schedule = {}; // {day: {tochoku: memberId|null, oncall: [memberId...]}}
+let heavyConfirmed = false;
+let _dropdown = null;
+
+// --- Helpers ---
+function getDayDiff(a, b){
+  return Math.abs(new Date(a+'T00:00:00') - new Date(b+'T00:00:00')) / 86400000;
+}
+
+function hasRecentTochoku(memberId, day){
+  const interval = fixedConfig.rules.interval || 3;
+  const cur = new Date(day+'T00:00:00');
+  for(let i=1; i<=interval+1; i++){
+    const d = new Date(cur); d.setDate(d.getDate()-i);
+    const ds = d.toISOString().slice(0,10);
+    if(schedule[ds]?.tochoku === memberId) return true;
+  }
+  // 前月当直も考慮
+  for(const [pd, pid] of Object.entries(prevMonthTochoku)){
+    if(pid === memberId && getDayDiff(day, pd) <= interval+1) return true;
+  }
+  return false;
+}
+
+function dayState(memberId, day){
+  return (holidays[memberId]||{})[day] || 0;
+}
+
+function canAssignTochoku(member, day, heavy){
+  if(!member.canTochoku) return false;
+  if(dayState(member.id, day) >= 1) return false;
+  if(schedule[day]?.tochoku) return false;
+  if(hasRecentTochoku(member.id, day)) return false;
+  const needed = heavy ? (monthlyConfig[member.id]?.tH||0) : (monthlyConfig[member.id]?.tW||0);
+  const used = heavy ? (countT(member.id).tH) : (countT(member.id).tW);
+  if(used >= needed) return false;
+  return true;
+}
+
+function canAssignOncall(member, day, tochokuId, heavy){
+  if(!member.canOncall) return false;
+  if(member.id === tochokuId) return false;
+  if(dayState(member.id, day) === 1) return false;
+  if(isNGPair(tochokuId, member.id)) return false;
+  const used = heavy ? (countOC(member.id).ocH) : (countOC(member.id).ocW);
+  const needed = heavy ? (monthlyConfig[member.id]?.ocH||0) : (monthlyConfig[member.id]?.ocW||0);
+  if(used >= needed) return false;
+  // oncall連続チェック
+  const maxConsec = fixedConfig.rules.maxOncallConsec || 3;
+  let consec = 0;
+  const cur = new Date(day+'T00:00:00');
+  for(let i=1; i<=maxConsec; i++){
+    const d = new Date(cur); d.setDate(d.getDate()-i);
+    const ds = d.toISOString().slice(0,10);
+    if(schedule[ds]?.oncall?.includes(member.id)) consec++;
+    else break;
+  }
+  if(consec >= maxConsec) return false;
+  return true;
+}
+
+function isNGPair(a, b){
+  return fixedConfig.ngPairs.some(p=>(p[0]===a&&p[1]===b)||(p[0]===b&&p[1]===a));
+}
+
+function isVisitingMember(id){
+  return fixedConfig.specialConditions.some(c=>c.type==='visiting'&&c.memberId===id);
+}
+
+function getOncallPool(tochokuId){
+  // oncall2人必要か、グループ限定oncallか判定
+  const tMember = fixedConfig.members.find(m=>m.id===tochokuId);
+  const tRole = tMember?.roleId;
+  // グループ限定oncall条件
+  const groupCond = fixedConfig.specialConditions.find(c=>c.type==='groupOncall'&&c.memberId===tochokuId);
+  if(groupCond){
+    return fixedConfig.members.filter(m=>m.roleId===groupCond.groupId&&m.canOncall);
+  }
+  // 外勤当直日はグループ限定（設定があれば）
+  if(isVisitingMember(tochokuId)){
+    const visCond = fixedConfig.specialConditions.find(c=>c.type==='groupOncall'&&c.memberId===tochokuId);
+    if(visCond) return fixedConfig.members.filter(m=>m.roleId===visCond.groupId&&m.canOncall);
+  }
+  return fixedConfig.members.filter(m=>m.canOncall);
+}
+
+function getOncallNeeded(tochokuId){
+  return fixedConfig.specialConditions.some(c=>c.type==='oncall2'&&c.memberId===tochokuId) ? 2 : 1;
+}
+
+function countT(memberId){
+  let tW=0,tH=0;
+  Object.entries(schedule).forEach(([day,s])=>{
+    if(s.tochoku===memberId){ isHeavy(day)?tH++:tW++; }
+  });
+  return{tW,tH};
+}
+function countOC(memberId){
+  let ocW=0,ocH=0;
+  Object.entries(schedule).forEach(([day,s])=>{
+    if(s.oncall?.includes(memberId)){ isHeavy(day)?ocH++:ocW++; }
+  });
+  return{ocW,ocH};
+}
+
+// 均等配置・即時書き込み（1人ずつ）
+function assignEvenlyImmediate(member, dayList, heavy){
+  const needed = heavy ? (monthlyConfig[member.id]?.tH||0) : (monthlyConfig[member.id]?.tW||0);
+  if(needed===0) return [];
+  const warnings = [];
+  const segSize = dayList.length / needed;
+
+  for(let i=0; i<needed; i++){
+    const segStart = Math.floor(i * segSize);
+    const segEnd = Math.min(Math.floor((i+1) * segSize)-1, dayList.length-1);
+    const mid = Math.floor((segStart+segEnd)/2);
+
+    // 中央から外側へ探索順を生成
+    const order = [];
+    const half = Math.max(mid-segStart, segEnd-mid);
+    for(let r=0; r<=half; r++){
+      if(mid-r >= segStart) order.push(mid-r);
+      if(r>0 && mid+r <= segEnd) order.push(mid+r);
+    }
+
+    let found = false;
+    // 通常探索（セグメント内）
+    {
+      for(const idx of order){
+        const day = dayList[idx];
+        if(!canAssignTochoku(member, day, heavy)) continue;
+        schedule[day].tochoku = member.id;
+        found = true;
+        break;
+      }
+    }
+    // セグメント外から探す
+    if(!found){
+      for(const day of dayList){
+        if(!canAssignTochoku(member, day, heavy)) continue;
+        schedule[day].tochoku = member.id;
+        found = true;
+        warnings.push(`${day}：${member.name} セグメント外から割り当て`);
+        break;
+      }
+    }
+    if(!found){
+      warnings.push(`${member.name}：${heavy?'休日':'平日'}当直スロット${i+1}を割り当てできませんでした（中3日ルール）`);
+    }
+  }
+  return warnings;
+}
+
+// --- プレチェック ---
+function renderPreCheck(){
+  const el = document.getElementById('gen-precheck');
+  if(!el) return;
+  const m = document.getElementById('target-month').value;
+  if(!m){el.innerHTML='<div class="warn-box">対象月を選択してください</div>';return;}
+  const{wdays,heavy} = getMonthDayCounts();
+  const visiting = fixedConfig.specialConditions.filter(c=>c.type==='visiting');
+  const visitingInfo = visiting.map(c=>{
+    const mem = fixedConfig.members.find(m=>m.id===c.memberId);
+    const sat = visitingWeekSelected[c.memberId];
+    return `${mem?.name||c.memberId}（${sat?new Date(sat+'T00:00:00').getDate()+'日土曜週':'月末自動'}）`;
   }).join('、');
-  document.getElementById('pre-check').innerHTML=`<div style="font-size:13px;line-height:2.2">
-    <div>対象月: <strong>${document.getElementById('target-month').value}</strong>（平日${wdays}日・土日重祝${heavy}日）</div>
-    <div>外勤: <strong>${visInfo||'なし'}</strong></div>
-    <div style="font-size:12px;color:#888">※「回数設定」タブで各人の回数を確認・調整してから生成してください</div>
+  el.innerHTML=`<div style="font-size:13px;line-height:2.2">
+    <div>対象月: <strong>${m}</strong>（平日 ${wdays}日・土日重祝日 ${heavy}日）</div>
+    ${visiting.length?`<div>外勤: <strong>${visitingInfo}</strong></div>`:''}
+    <div style="font-size:12px;color:var(--text-2)">「回数設定」タブで各人の回数を確認してから生成してください</div>
   </div>`;
 }
 
-function dayState(name,day){return(holidays[name]||{})[day]||0}
+// --- 土日生成 ---
+function generateHeavy(){
+  const days = getDays();
+  if(!days.length){alert('対象月を選択してください');return;}
+  const heavyDays = days.filter(isHeavy);
+  heavyConfirmed = false;
 
-// ---- ホバーハイライト ----
-let _highlightName=null;
-function highlightDoctor(name){
-  _highlightName=name;
-  document.querySelectorAll('.cal-day').forEach(cell=>{
-    cell.classList.remove('highlighted');
+  // scheduleを休日分だけ初期化
+  days.forEach(d=>{ if(!schedule[d]) schedule[d]={tochoku:null,oncall:[]}; });
+  heavyDays.forEach(d=>{ schedule[d]={tochoku:null,oncall:[]}; });
+  document.getElementById('gen-weekday-section').style.display='none';
+
+  const warnings = [];
+
+  // Step1: 外勤メンバーを先に配置
+  fixedConfig.specialConditions.filter(c=>c.type==='visiting').forEach(c=>{
+    const mem = fixedConfig.members.find(m=>m.id===c.memberId);
+    if(!mem) return;
+    const pairs = getWeekendPairs();
+    const sat = visitingWeekSelected[mem.id];
+    let tgt = [];
+    if(sat){ const p=pairs.find(p=>p.sat===sat); if(p){if(p.sat)tgt.push(p.sat);if(p.sun)tgt.push(p.sun);} }
+    if(!tgt.length) tgt = heavyDays.slice(-2);
+    tgt.forEach(day=>{
+      if(schedule[day]) schedule[day].tochoku = mem.id;
+    });
+    if(tgt.length < 2) warnings.push(`${mem.name}：土日2連続確保できませんでした`);
   });
-  if(!name)return;
-  document.querySelectorAll(`[data-doctor="${name}"]`).forEach(el=>{
-    const cell=el.closest('.cal-day');
-    if(cell)cell.classList.add('highlighted');
+
+  // Step2: 各医師の休日当直を均等配置（不整脈→虚血の順）
+  // 役割グループ順でソート（特殊条件でグループ限定oncallが設定されているグループを先に）
+  const arrhGroupIds = new Set(
+    fixedConfig.specialConditions.filter(c=>c.type==='groupOncall').map(c=>c.memberId)
+  );
+  const arrhMembers = fixedConfig.members.filter(m=>arrhGroupIds.has(m.id)||
+    fixedConfig.specialConditions.some(c=>c.memberId===m.id&&c.type==='groupOncall'));
+  // 不整脈系（oncall不可グループ）を先に
+  const oncallNg = fixedConfig.members.filter(m=>!m.canOncall&&m.canTochoku&&!isVisitingMember(m.id));
+  const oncallOk = fixedConfig.members.filter(m=>m.canOncall&&m.canTochoku&&!isVisitingMember(m.id));
+  const tochokuOrder = [...oncallNg, ...oncallOk];
+
+  tochokuOrder.forEach(mem=>{
+    const w = assignEvenlyImmediate(mem, heavyDays, true);
+    warnings.push(...w);
+  });
+
+  // Step3: oncallを配置
+  // 土日をペアで処理し、同じ週に土日両方集約して負担週を最小化する
+  const weekendPairs = getWeekendPairs();
+  const processedDays = new Set();
+
+  // その人がすでにその週の土日に当直またはoncallで入っているか確認
+  function alreadyInWeek(memberId, satDay, sunDay){
+    if(satDay && schedule[satDay]?.tochoku === memberId) return true;
+    if(sunDay && schedule[sunDay]?.tochoku === memberId) return true;
+    if(satDay && schedule[satDay]?.oncall?.includes(memberId)) return true;
+    if(sunDay && schedule[sunDay]?.oncall?.includes(memberId)) return true;
+    return false;
+  }
+
+  // oncallスコア計算（同じ週に既に入っている人を強く優先）
+  function ocScoreH(member, day, satDay, sunDay){
+    const ra = monthlyConfig[member.id]?.ocH||0;
+    const ua = countOC(member.id).ocH;
+    const remainRatio = ra>0 ? (ra-ua)/ra : 0;
+    // 同じ週に既に当直oroncallで入っている→強く優先（-20点ボーナス）
+    const weekBonus = alreadyInWeek(member.id, satDay, sunDay) ? -20 : 0;
+    return (ua-ra) + weekBonus + (Math.random()-.5)*.1;
+  }
+
+  weekendPairs.forEach(pair=>{
+    const satDay = pair.sat;
+    const sunDay = pair.sun;
+
+    // --- 土曜のoncall ---
+    if(satDay && !processedDays.has(satDay)){
+      const tDoc = schedule[satDay]?.tochoku;
+      if(tDoc){
+        const pool = getOncallPool(tDoc);
+        const needed = getOncallNeeded(tDoc);
+        const avail = pool.filter(m=>canAssignOncall(m,satDay,tDoc,true));
+        avail.sort((a,b)=>ocScoreH(a,satDay,satDay,sunDay)-ocScoreH(b,satDay,satDay,sunDay));
+        let chosen = avail.slice(0,needed);
+        if(chosen.length<needed){
+          const fb=pool.filter(m=>m.id!==tDoc&&dayState(m.id,satDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m));
+          fb.sort((a,b)=>ocScoreH(a,satDay,satDay,sunDay)-ocScoreH(b,satDay,satDay,sunDay));
+          chosen.push(...fb.slice(0,needed-chosen.length));
+          if(chosen.length<needed) warnings.push(`${satDay}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
+        }
+        schedule[satDay].oncall = chosen.map(m=>m.id);
+
+        // 土曜oncall→日曜当直のセット：日曜当直がまだ未割り当てなら土曜oncall1人目を割り当て
+        if(sunDay && !schedule[sunDay]?.tochoku && chosen.length>0){
+          const candidate = fixedConfig.members.find(m=>m.id===chosen[0].id);
+          if(candidate && canAssignTochoku(candidate, sunDay, true)){
+            schedule[sunDay].tochoku = candidate.id;
+          }
+        }
+      }
+      processedDays.add(satDay);
+    }
+
+    // --- 日曜のoncall ---
+    if(sunDay && !processedDays.has(sunDay)){
+      const tDoc = schedule[sunDay]?.tochoku;
+      if(tDoc){
+        const pool = getOncallPool(tDoc);
+        const needed = getOncallNeeded(tDoc);
+        const satTDoc = schedule[satDay]?.tochoku;
+
+        const avail = pool.filter(m=>canAssignOncall(m,sunDay,tDoc,true));
+        // 土曜当直者を日曜oncallに優先（同じ週集約）
+        avail.sort((a,b)=>{
+          const aBonus = (a.id===satTDoc)?-20:0;
+          const bBonus = (b.id===satTDoc)?-20:0;
+          return ocScoreH(a,sunDay,satDay,sunDay)+aBonus-(ocScoreH(b,sunDay,satDay,sunDay)+bBonus);
+        });
+        let chosen = avail.slice(0,needed);
+        if(chosen.length<needed){
+          const fb=pool.filter(m=>m.id!==tDoc&&dayState(m.id,sunDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m));
+          fb.sort((a,b)=>{
+            const aBonus=(a.id===satTDoc)?-20:0,bBonus=(b.id===satTDoc)?-20:0;
+            return ocScoreH(a,sunDay,satDay,sunDay)+aBonus-(ocScoreH(b,sunDay,satDay,sunDay)+bBonus);
+          });
+          chosen.push(...fb.slice(0,needed-chosen.length));
+          if(chosen.length<needed) warnings.push(`${sunDay}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
+        }
+        schedule[sunDay].oncall = chosen.map(m=>m.id);
+      }
+      processedDays.add(sunDay);
+    }
+  });
+
+  // 土日ペア以外の祝日など
+  heavyDays.filter(d=>!processedDays.has(d)).forEach(day=>{
+    const tDoc = schedule[day]?.tochoku;
+    if(!tDoc){processedDays.add(day);return;}
+    const pool = getOncallPool(tDoc);
+    const needed = getOncallNeeded(tDoc);
+    const avail = pool.filter(m=>canAssignOncall(m,day,tDoc,true));
+    avail.sort((a,b)=>ocScoreH(a,day,null,null)-ocScoreH(b,day,null,null));
+    let chosen = avail.slice(0,needed);
+    if(chosen.length<needed){
+      const fb=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m));
+      fb.sort((a,b)=>ocScoreH(a,day,null,null)-ocScoreH(b,day,null,null));
+      chosen.push(...fb.slice(0,needed-chosen.length));
+      if(chosen.length<needed) warnings.push(`${day}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
+    }
+    schedule[day].oncall = chosen.map(m=>m.id);
+    processedDays.add(day);
+  });
+
+  // 未割り当て警告
+  heavyDays.filter(d=>!schedule[d]?.tochoku).forEach(d=>warnings.push(`${d}：休日当直が割り当てられませんでした`));
+
+  showWarnings(warnings, 'gen-warnings');
+  renderHeavyCalendar(heavyDays);
+  document.getElementById('btn-confirm-heavy').style.display='';
+  document.getElementById('btn-regen-heavy').style.display='';
+}
+
+function getPrevDayStr(s){
+  const d=new Date(s+'T00:00:00');d.setDate(d.getDate()-1);return d.toISOString().slice(0,10);
+}
+function isSunday(s){return new Date(s+'T00:00:00').getDay()===0;}
+
+// --- 土日カレンダー描画 ---
+function renderHeavyCalendar(heavyDays){
+  const el = document.getElementById('gen-heavy-calendar');
+  const[y,mo]=document.getElementById('target-month').value.split('-').map(Number);
+  const firstDow = new Date(y,mo-1,1).getDay();
+  const allDays = getDays();
+  const offset = firstDow===0?6:firstDow-1;
+  const cells = Array(offset).fill(null).concat(allDays);
+  const DOW=['月','火','水','木','金','土','日'];
+
+  let html=`<div class="cal-wrap"><div class="cal-grid">`;
+  DOW.forEach(d=>html+=`<div class="cal-hd">${d}</div>`);
+  cells.forEach(day=>{
+    if(!day){html+='<div class="cal-cell empty"></div>';return;}
+    const isH=isHeavy(day);
+    if(!isH){html+=`<div class="cal-cell" style="opacity:.35"><div class="cal-date" style="color:var(--text-3)">${new Date(day+'T00:00:00').getDate()}</div></div>`;return;}
+    const s=schedule[day]||{tochoku:null,oncall:[]};
+    const tMem=s.tochoku?fixedConfig.members.find(m=>m.id===s.tochoku):null;
+    const tColor=tMem?getMemberColor(tMem):'#ccc';
+    const isArr=tMem&&!tMem.canOncall&&!isVisitingMember(tMem.id);
+    const isVis=tMem&&isVisitingMember(tMem.id);
+    let cls='cal-cell heavy';
+    if(isArr)cls='cal-cell arrh';
+    if(isVis)cls='cal-cell visiting';
+    if(isClinicHol(day))cls='cal-cell clinic-hol';
+    const needed=s.tochoku?getOncallNeeded(s.tochoku):1;
+    const shortage=!s.tochoku||s.oncall.length<needed;
+    if(shortage)cls+=' shortage';
+    const dateNum=new Date(day+'T00:00:00').getDate();
+    const dow=new Date(day+'T00:00:00').getDay();
+    const dateColor=dow===6?'var(--accent)':dow===0||isHol(day)?'var(--danger)':'';
+    const typeLabel=isClinicHol(day)?'診祝':isHeavy(day)?'土日':'';
+    const oncallHtml=s.oncall.map((oid,i)=>{
+      const om=fixedConfig.members.find(m=>m.id===oid);
+      return`<span data-doctor="${oid}" onmouseenter="highlightDoctor('${oid}')" onmouseleave="highlightDoctor(null)" onclick="showDropdown(event,'${day}','oncall',${i})">📞${om?.name||oid}</span>`;
+    }).join(' ');
+    const addOncall=s.oncall.length<(needed+1)?`<span class="cal-add" onclick="showAddOncall(event,'${day}')">＋</span>`:'';
+    html+=`<div class="${cls}" id="cell-${day}">
+      <div class="cal-date" style="${dateColor?'color:'+dateColor:''}">
+        <span>${dateNum}</span>
+        ${typeLabel?`<span class="cal-type ${isClinicHol(day)?'ch':'we'}">${typeLabel}</span>`:''}
+      </div>
+      <div class="cal-tochoku" data-doctor="${s.tochoku||''}"
+        onmouseenter="highlightDoctor('${s.tochoku||''}')" onmouseleave="highlightDoctor(null)"
+        onclick="showDropdown(event,'${day}','tochoku',0)"
+        style="color:${tColor};font-weight:600;margin-bottom:2px">
+        ${tMem?.name||'—'}
+      </div>
+      <div class="cal-oncall">${oncallHtml} ${addOncall}</div>
+    </div>`;
+  });
+  html+='</div></div>';
+  el.innerHTML=html;
+}
+
+// --- 土日確定→平日生成 ---
+function confirmHeavy(){
+  heavyConfirmed=true;
+  document.getElementById('gen-weekday-section').style.display='block';
+  generateWeekday();
+}
+
+// --- 平日生成 ---
+function generateWeekday(){
+  const days=getDays();
+  const weekdays=days.filter(d=>!isHeavy(d));
+  const warnings=[];
+
+  // 平日scheduleをリセット
+  weekdays.forEach(d=>{schedule[d]={tochoku:null,oncall:[]};});
+
+  // oncall不可グループ→oncall可グループの順で平日当直を均等配置
+  const oncallNg=fixedConfig.members.filter(m=>!m.canOncall&&m.canTochoku&&!isVisitingMember(m.id));
+  const oncallOk=fixedConfig.members.filter(m=>m.canOncall&&m.canTochoku&&!isVisitingMember(m.id));
+  [...oncallNg,...oncallOk].forEach(mem=>{
+    const w=assignEvenlyImmediate(mem,weekdays,false);
+    warnings.push(...w);
+  });
+
+  // 平日oncall
+  weekdays.forEach(day=>{
+    const tDoc=schedule[day]?.tochoku;if(!tDoc)return;
+    const needed=getOncallNeeded(tDoc);
+    const pool=getOncallPool(tDoc);
+    const avail=pool.filter(m=>canAssignOncall(m,day,tDoc,false));
+    avail.sort((a,b)=>{
+      const ra=monthlyConfig[a.id]?.ocW||0,rb=monthlyConfig[b.id]?.ocW||0;
+      const ua=countOC(a.id).ocW,ub=countOC(b.id).ocW;
+      return (ua-ra)-(ub-rb)+(Math.random()-.5)*.1;
+    });
+    let chosen=avail.slice(0,needed);
+    if(chosen.length<needed){
+      const fb=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m));
+      fb.sort((a,b)=>countOC(a.id).ocW-countOC(b.id).ocW+(Math.random()-.5)*.1);
+      chosen.push(...fb.slice(0,needed-chosen.length));
+      if(chosen.length<needed)warnings.push(`${day}：oncall${needed}人必要→${chosen.length}人のみ`);
+    }
+    schedule[day].oncall=chosen.map(m=>m.id);
+  });
+
+  weekdays.filter(d=>!schedule[d]?.tochoku).forEach(d=>warnings.push(`${d}：平日当直が割り当てられませんでした`));
+
+  showWarnings(warnings,'gen-weekday-warnings');
+  renderFullCalendar();
+  renderSummary();
+}
+
+// --- フルカレンダー（土日＋平日） ---
+function renderFullCalendar(){
+  const el=document.getElementById('gen-weekday-calendar');
+  const[y,mo]=document.getElementById('target-month').value.split('-').map(Number);
+  const firstDow=new Date(y,mo-1,1).getDay();
+  const allDays=getDays();
+  const offset=firstDow===0?6:firstDow-1;
+  const cells=Array(offset).fill(null).concat(allDays);
+  const DOW=['月','火','水','木','金','土','日'];
+
+  let html=`<div class="cal-wrap"><div class="cal-grid">`;
+  DOW.forEach(d=>html+=`<div class="cal-hd">${d}</div>`);
+  cells.forEach(day=>{
+    if(!day){html+='<div class="cal-cell empty"></div>';return;}
+    const s=schedule[day]||{tochoku:null,oncall:[]};
+    const tMem=s.tochoku?fixedConfig.members.find(m=>m.id===s.tochoku):null;
+    const tColor=tMem?getMemberColor(tMem):'#ccc';
+    const isH=isHeavy(day);
+    const isArr=tMem&&!tMem.canOncall&&!isVisitingMember(tMem.id);
+    const isVis=tMem&&isVisitingMember(tMem.id);
+    let cls='cal-cell'+(isH?' heavy':'');
+    if(isArr)cls='cal-cell arrh';
+    if(isVis)cls='cal-cell visiting';
+    if(isClinicHol(day))cls='cal-cell clinic-hol';
+    const needed=s.tochoku?getOncallNeeded(s.tochoku):1;
+    if(!s.tochoku||s.oncall.length<needed)cls+=' shortage';
+    const dateNum=new Date(day+'T00:00:00').getDate();
+    const dow=new Date(day+'T00:00:00').getDay();
+    const dateColor=dow===6?'var(--accent)':dow===0||isHol(day)?'var(--danger)':'';
+    const typeLabel=isClinicHol(day)?'診祝':isH?'土日':'平';
+    const oncallHtml=s.oncall.map((oid,i)=>{
+      const om=fixedConfig.members.find(m=>m.id===oid);
+      return`<span data-doctor="${oid}" onmouseenter="highlightDoctor('${oid}')" onmouseleave="highlightDoctor(null)" onclick="showDropdown(event,'${day}','oncall',${i})">📞${om?.name||oid}</span>`;
+    }).join(' ');
+    const addOncall=s.oncall.length<needed+1?`<span class="cal-add" onclick="showAddOncall(event,'${day}')">＋</span>`:'';
+    html+=`<div class="${cls}" id="cell-${day}">
+      <div class="cal-date" style="${dateColor?'color:'+dateColor:''}">
+        <span>${dateNum}</span>
+        <span class="cal-type ${isClinicHol(day)?'ch':isH?'we':''}">${typeLabel}</span>
+      </div>
+      <div class="cal-tochoku" data-doctor="${s.tochoku||''}"
+        onmouseenter="highlightDoctor('${s.tochoku||''}')" onmouseleave="highlightDoctor(null)"
+        onclick="showDropdown(event,'${day}','tochoku',0)"
+        style="color:${tColor};font-weight:600;margin-bottom:2px">
+        ${tMem?.name||'—'}
+      </div>
+      <div class="cal-oncall">${oncallHtml} ${addOncall}</div>
+    </div>`;
+  });
+  html+='</div></div>';
+  el.innerHTML=html;
+}
+
+// --- 集計表 ---
+function renderSummary(){
+  const el=document.getElementById('gen-summary');
+  let html=`<div class="card"><div class="card-title"><span class="icon">📊</span>個人別集計</div>
+  <div style="overflow-x:auto"><table class="sum-tbl"><thead><tr>
+    <th>医師</th><th>平日当直</th><th>休日当直</th><th>当直計</th><th>平日oncall</th><th>休日oncall</th><th>oncall計</th>
+  </tr></thead><tbody>`;
+  fixedConfig.members.forEach(mem=>{
+    const{tW,tH}=countT(mem.id);
+    const{ocW,ocH}=countOC(mem.id);
+    const cfgTW=monthlyConfig[mem.id]?.tW||0,cfgTH=monthlyConfig[mem.id]?.tH||0;
+    const cfgOW=monthlyConfig[mem.id]?.ocW||0,cfgOH=monthlyConfig[mem.id]?.ocH||0;
+    const color=getMemberColor(mem);
+    const c=(v,t)=>v===t?'var(--success)':v>t?'var(--danger)':'var(--warn)';
+    html+=`<tr>
+      <td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>
+        <span onmouseenter="highlightDoctor('${mem.id}')" onmouseleave="highlightDoctor(null)" style="cursor:default">${mem.name}</span>
+      </td>
+      <td style="color:${c(tW,cfgTW)}">${tW}<span style="font-size:10px;color:var(--text-3)">/${cfgTW}</span></td>
+      <td style="color:${c(tH,cfgTH)}">${tH}<span style="font-size:10px;color:var(--text-3)">/${cfgTH}</span></td>
+      <td style="font-weight:600;color:${c(tW+tH,cfgTW+cfgTH)}">${tW+tH}<span style="font-size:10px;color:var(--text-3)">/${cfgTW+cfgTH}</span></td>
+      <td style="color:${c(ocW,cfgOW)}">${ocW}<span style="font-size:10px;color:var(--text-3)">/${cfgOW}</span></td>
+      <td style="color:${c(ocH,cfgOH)}">${ocH}<span style="font-size:10px;color:var(--text-3)">/${cfgOH}</span></td>
+      <td style="font-weight:600;color:${c(ocW+ocH,cfgOW+cfgOH)}">${ocW+ocH}<span style="font-size:10px;color:var(--text-3)">/${cfgOW+cfgOH}</span></td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div>
+  <p style="font-size:11px;color:var(--text-3);margin-top:8px">緑=設定通り　黄=不足　赤=超過</p></div>`;
+  el.innerHTML=html;
+}
+
+// --- 警告表示 ---
+function showWarnings(warnings, elId){
+  const el=document.getElementById(elId);if(!el)return;
+  if(!warnings.length){el.innerHTML='<div class="success-box">✓ 設定通りに割り当て完了</div>';return;}
+  el.innerHTML=`<div class="warn-box">${warnings.map(w=>`⚠ ${w}`).join('<br>')}</div>`;
+}
+
+// --- ホバーハイライト ---
+function highlightDoctor(id){
+  document.querySelectorAll('.cal-cell').forEach(c=>c.classList.remove('highlighted'));
+  if(!id)return;
+  document.querySelectorAll(`[data-doctor="${id}"]`).forEach(el=>{
+    el.closest('.cal-cell')?.classList.add('highlighted');
   });
 }
 
-// ---- インライン編集 ----
-let _currentDropdown=null;
-function closeDropdown(){if(_currentDropdown){_currentDropdown.remove();_currentDropdown=null;}}
-document.addEventListener('click',e=>{if(_currentDropdown&&!_currentDropdown.contains(e.target))closeDropdown();});
+// --- ドロップダウン ---
+function closeDropdown(){if(_dropdown){_dropdown.remove();_dropdown=null;}}
+document.addEventListener('click',e=>{if(_dropdown&&!_dropdown.contains(e.target))closeDropdown();});
 
 function showDropdown(e,day,type,idx){
-  e.stopPropagation();
-  closeDropdown();
-  const arrhythmiaSet=new Set(doctors.filter(d=>d.role==='arrhythmia').map(d=>d.name));
-  const visitingSet=new Set(doctors.filter(d=>d.role==='visiting').map(d=>d.name));
+  e.stopPropagation();closeDropdown();
   const s=schedule[day];
-  const tDoc=s.tochoku;
-  const isVisiting=tDoc&&visitingSet.has(tDoc);
-  const isArr=tDoc&&arrhythmiaSet.has(tDoc);
+  const tDoc=s?.tochoku;
+  const isH=isHeavy(day);
 
   let candidates=[];
   if(type==='tochoku'){
-    candidates=doctors.filter(d=>d.canTochoku&&d.name!==s.oncall?.[0]&&d.name!==s.oncall?.[1]).map(d=>d.name);
+    candidates=fixedConfig.members.filter(m=>{
+      if(!m.canTochoku||isVisitingMember(m.id))return false;
+      if(dayState(m.id,day)>=1)return false;
+      return true;
+    });
   } else {
-    // oncall候補：不整脈当直日・外勤当直日は虚血グループのみ
-    const pool=(isArr||isVisiting)
-      ?doctors.filter(d=>!arrhythmiaSet.has(d.name)&&d.canOncall)
-      :doctors.filter(d=>d.canOncall);
-    candidates=pool.filter(d=>d.name!==tDoc&&d.name!==s.oncall?.[idx===0?1:0]).map(d=>d.name);
+    const pool=getOncallPool(tDoc);
+    candidates=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1);
   }
 
   const dd=document.createElement('div');
-  dd.className='edit-dropdown';
-  const header=document.createElement('div');
-  header.className='dd-header';
-  header.textContent=type==='tochoku'?'当直を変更':'oncallを変更';
-  dd.appendChild(header);
+  dd.className='sh-dropdown';
+  dd.innerHTML=`<div class="dd-hd">${type==='tochoku'?'当直を変更':'oncallを変更'}</div>`;
 
-  // 「なし」選択肢（oncallのみ）
   if(type==='oncall'){
-    const noneItem=document.createElement('div');
-    noneItem.className='dd-item';
-    noneItem.textContent='— なし';
-    noneItem.style.color='#999';
-    noneItem.onclick=()=>{
-      s.oncall.splice(idx,1);
-      closeDropdown();
-      rerenderResult();
-    };
-    dd.appendChild(noneItem);
+    const none=document.createElement('div');
+    none.className='dd-item';none.style.color='var(--text-3)';none.textContent='— なし';
+    none.onclick=()=>{s.oncall.splice(idx,1);closeDropdown();refreshCalendar(day);};
+    dd.appendChild(none);
   }
 
-  candidates.forEach(name=>{
+  candidates.forEach(mem=>{
     const item=document.createElement('div');
     item.className='dd-item';
-    const d=doctors.find(x=>x.name===name);
-    item.innerHTML=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d?.color||'#999'};margin-right:6px"></span>${name}`;
+    const color=getMemberColor(mem);
+    item.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>${mem.name}`;
     item.onclick=()=>{
-      if(type==='tochoku'){
-        s.tochoku=name;
-      } else {
-        s.oncall[idx]=name;
-      }
-      closeDropdown();
-      rerenderResult();
+      if(type==='tochoku') s.tochoku=mem.id;
+      else s.oncall[idx]=mem.id;
+      closeDropdown();refreshCalendar(day);
     };
     dd.appendChild(item);
   });
 
-  document.body.appendChild(dd);
-  _currentDropdown=dd;
+  document.body.appendChild(dd);_dropdown=dd;
   const rect=e.target.getBoundingClientRect();
-  const ddH=Math.min(candidates.length*36+40,280);
-  const top=rect.bottom+window.scrollY+4;
-  const left=Math.min(rect.left+window.scrollX,window.innerWidth-140);
-  // 画面内に収まるよう調整
-  const maxH=Math.min(280, window.innerHeight-80);
+  const maxH=Math.min(260,window.innerHeight-80);
   dd.style.maxHeight=maxH+'px';
-  dd.style.overflowY='auto';
-  const leftPos=Math.max(4, Math.min(rect.left+window.scrollX, window.innerWidth-160));
-  dd.style.left=leftPos+'px';
-  if(rect.bottom+40>window.innerHeight*0.6){
-    dd.style.bottom=(window.innerHeight-rect.top-window.scrollY+4)+'px';
-    dd.style.top='auto';
-  } else {
-    dd.style.top=(rect.bottom+window.scrollY+4)+'px';
-    dd.style.bottom='auto';
-  }
-}
-
-// oncallに新しい人を追加（外勤当直日用）
-function showAddOncall(e,day){
-  e.stopPropagation();
-  closeDropdown();
-  const arrhythmiaSet=new Set(doctors.filter(d=>d.role==='arrhythmia').map(d=>d.name));
-  const visitingSet=new Set(doctors.filter(d=>d.role==='visiting').map(d=>d.name));
-  const s=schedule[day];
-  const tDoc=s.tochoku;
-  const isArr=tDoc&&arrhythmiaSet.has(tDoc);
-  const isVisiting=tDoc&&visitingSet.has(tDoc);
-  const pool=(isArr||isVisiting)
-    ?doctors.filter(d=>!arrhythmiaSet.has(d.name)&&d.canOncall)
-    :doctors.filter(d=>d.canOncall);
-  const candidates=pool.filter(d=>d.name!==tDoc&&!s.oncall.includes(d.name)).map(d=>d.name);
-  const dd=document.createElement('div');
-  dd.className='edit-dropdown';
-  const header=document.createElement('div');header.className='dd-header';header.textContent='oncallを追加';
-  dd.appendChild(header);
-  candidates.forEach(name=>{
-    const item=document.createElement('div');item.className='dd-item';
-    const d=doctors.find(x=>x.name===name);
-    item.innerHTML=`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d?.color||'#999'};margin-right:6px"></span>${name}`;
-    item.onclick=()=>{s.oncall.push(name);closeDropdown();rerenderResult();};
-    dd.appendChild(item);
-  });
-  document.body.appendChild(dd);
-  _currentDropdown=dd;
-  const rect=e.target.getBoundingClientRect();
-  dd.style.maxHeight='240px';dd.style.overflowY='auto';
-  const leftPos2=Math.max(4,Math.min(rect.left+window.scrollX,window.innerWidth-160));
-  dd.style.left=leftPos2+'px';
-  if(rect.bottom+40>window.innerHeight*0.6){
+  const left=Math.max(4,Math.min(rect.left+window.scrollX,window.innerWidth-160));
+  dd.style.left=left+'px';
+  if(rect.bottom>window.innerHeight*0.65){
     dd.style.bottom=(window.innerHeight-rect.top-window.scrollY+4)+'px';dd.style.top='auto';
   } else {
     dd.style.top=(rect.bottom+window.scrollY+4)+'px';dd.style.bottom='auto';
   }
 }
 
-function rerenderResult(){
-  const days=getDays();
-  const arrhythmiaSet=new Set(doctors.filter(d=>d.role==='arrhythmia').map(d=>d.name));
-  const visitingSet=new Set(doctors.filter(d=>d.role==='visiting').map(d=>d.name));
-  // 集計を再計算
-  const tW={},tH={},ocW={},ocH={};
-  doctors.forEach(d=>{tW[d.name]=0;tH[d.name]=0;ocW[d.name]=0;ocH[d.name]=0});
-  days.forEach(day=>{
-    const s=schedule[day];if(!s)return;
-    const heavy=isHeavy(day);
-    if(s.tochoku){heavy?tH[s.tochoku]++:tW[s.tochoku]++;}
-    (s.oncall||[]).forEach(n=>{heavy?ocH[n]++:ocW[n]++;});
+function showAddOncall(e,day){
+  e.stopPropagation();closeDropdown();
+  const s=schedule[day];const tDoc=s?.tochoku;
+  const pool=getOncallPool(tDoc);
+  const candidates=pool.filter(m=>m.id!==tDoc&&!s.oncall.includes(m.id)&&dayState(m.id,day)!==1);
+  const dd=document.createElement('div');
+  dd.className='sh-dropdown';
+  dd.innerHTML='<div class="dd-hd">oncallを追加</div>';
+  candidates.forEach(mem=>{
+    const item=document.createElement('div');item.className='dd-item';
+    const color=getMemberColor(mem);
+    item.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>${mem.name}`;
+    item.onclick=()=>{s.oncall.push(mem.id);closeDropdown();refreshCalendar(day);};
+    dd.appendChild(item);
   });
-  Object.assign(_tW,tW);Object.assign(_tH,tH);Object.assign(_ocW,ocW);Object.assign(_ocH,ocH);
-  const warnings=[];
-  renderResult(days,tW,tH,ocW,ocH,warnings,arrhythmiaSet,visitingSet);
+  document.body.appendChild(dd);_dropdown=dd;
+  const rect=e.target.getBoundingClientRect();
+  dd.style.maxHeight='240px';
+  dd.style.left=Math.max(4,Math.min(rect.left+window.scrollX,window.innerWidth-160))+'px';
+  if(rect.bottom>window.innerHeight*0.65){
+    dd.style.bottom=(window.innerHeight-rect.top-window.scrollY+4)+'px';dd.style.top='auto';
+  } else {
+    dd.style.top=(rect.bottom+window.scrollY+4)+'px';dd.style.bottom='auto';
+  }
 }
 
-function generate(){
-  const days=getDays();
-  if(!days.length){alert('対象月を選択してください');return}
-  if(Object.keys(monthConfig).length===0)computeMonthConfig();
-
-  const arrhythmiaSet=new Set(doctors.filter(d=>d.role==='arrhythmia').map(d=>d.name));
-  const visitingSet=new Set(doctors.filter(d=>d.role==='visiting').map(d=>d.name));
-  const ischemicOncallPool=doctors.filter(d=>!arrhythmiaSet.has(d.name)&&d.canOncall);
-
-  const tW={},tH={},ocW={},ocH={};
-  doctors.forEach(d=>{tW[d.name]=0;tH[d.name]=0;ocW[d.name]=0;ocH[d.name]=0});
-  const rem={};
-  doctors.forEach(d=>{rem[d.name]={
-    tW:monthConfig[d.name]?.tW||0, tH:monthConfig[d.name]?.tH||0,
-    ocW:monthConfig[d.name]?.ocW||0, ocH:monthConfig[d.name]?.ocH||0,
-  }});
-
-  schedule={};
-  const warnings=[];
-  days.forEach(d=>{schedule[d]={tochoku:null,oncall:[]}});
-  const weekdays=days.filter(d=>!isHeavy(d));
-  const heavyDays=days.filter(d=>isHeavy(d));
-
-  // 中3日チェック：scheduleに書き込まれた当直との距離
-  function hasRecentTochoku(name, day){
-    const cur=new Date(day+'T00:00:00');
-    for(let i=1;i<=4;i++){
-      const d=new Date(cur);d.setDate(d.getDate()-i);
-      if(schedule[d.toISOString().slice(0,10)]?.tochoku===name)return true;
-    }
-    // 後方向もチェック（中3日は前後両方）
-    for(let i=1;i<=4;i++){
-      const d=new Date(cur);d.setDate(d.getDate()+i);
-      if(schedule[d.toISOString().slice(0,10)]?.tochoku===name)return true;
-    }
-    return false;
+function refreshCalendar(day){
+  // 変更した日のセルだけ再描画
+  const allDays=getDays();
+  const isH=isHeavy(day);
+  if(heavyConfirmed||!isH){
+    renderFullCalendar();
+    renderSummary();
+  } else {
+    renderHeavyCalendar(allDays.filter(isHeavy));
   }
-
-  // 当直可能チェック（schedule書き込み済み状態で判定）
-  function canT(d, day, heavy){
-    if(!d.canTochoku||visitingSet.has(d.name))return false;
-    if(dayState(d.name,day)>=1)return false;
-    if(schedule[day].tochoku)return false;
-    if(schedule[getPrevDay(day)]?.tochoku===d.name)return false;
-    if(hasRecentTochoku(d.name,day))return false;
-    if(heavy&&rem[d.name].tH<=0)return false;
-    if(!heavy&&rem[d.name].tW<=0)return false;
-    return true;
-  }
-
-  function canOc(dr,day,tDoc,heavy){
-    if(!dr.canOncall||dr.name===tDoc)return false;
-    if(dayState(dr.name,day)===1)return false;
-    if(isNgPair(tDoc,dr.name))return false;
-    if(heavy&&rem[dr.name].ocH<=0)return false;
-    if(!heavy&&rem[dr.name].ocW<=0)return false;
-    return true;
-  }
-
-  // 個人の当直を均等配置しながら即時書き込み
-  // dayList: 候補日リスト、needed: 必要回数、heavy: 休日かどうか
-  function assignEvenlyImmediate(d, dayList, needed, heavy){
-    if(needed===0)return 0;
-    let assigned=0;
-
-    // 「入れる日」を先に絞り込む
-    const cands=dayList.filter(day=>canT(d,day,heavy));
-
-    if(!cands.length){
-      warnings.push(`${d.name}：候補日なし（希望休・中3日ルール等）`);
-      return 0;
-    }
-
-    // cands をneeded等分し、各セグメントの中央から割り当て
-    const segSize=cands.length/needed;
-    for(let i=0;i<needed;i++){
-      const segStart=Math.floor(i*segSize);
-      const segEnd=Math.min(Math.floor((i+1)*segSize)-1, cands.length-1);
-      const mid=Math.floor((segStart+segEnd)/2);
-
-      // 中央から外側へ探索順を生成
-      const order=[];
-      const halfRange=Math.max(mid-segStart, segEnd-mid);
-      for(let r=0;r<=halfRange;r++){
-        if(mid-r>=segStart)order.push(mid-r);
-        if(r>0&&mid+r<=segEnd)order.push(mid+r);
-      }
-
-      let found=false;
-      // セグメント内で探す
-      for(const idx of order){
-        const day=cands[idx];
-        if(!canT(d,day,heavy))continue; // scheduleが更新されているので再チェック
-        schedule[day].tochoku=d.name;
-        if(heavy){tH[d.name]++;rem[d.name].tH--;}
-        else{tW[d.name]++;rem[d.name].tW--;}
-        assigned++;
-        found=true;
-        break;
-      }
-
-      // セグメント内になければ全候補から探す
-      if(!found){
-        for(const day of cands){
-          if(!canT(d,day,heavy))continue;
-          schedule[day].tochoku=d.name;
-          if(heavy){tH[d.name]++;rem[d.name].tH--;}
-          else{tW[d.name]++;rem[d.name].tW--;}
-          assigned++;
-          found=true;
-          break;
-        }
-      }
-
-      if(!found)warnings.push(`${d.name}：${heavy?'休日':'平日'}当直スロット${i+1}を割り当てできませんでした（中3日ルール）`);
-    }
-    return assigned;
-  }
-
-  function tScore(d,heavy){
-    const rc=heavy?rem[d.name].tH:rem[d.name].tW;
-    return -rc*10+d.tBias*0.3+(Math.random()-0.5)*0.3;
-  }
-
-  const arrhOncallCount={};
-  ischemicOncallPool.forEach(d=>{arrhOncallCount[d.name]=0});
-  function ocScore(d,heavy,isArr){
-    const rc=heavy?rem[d.name].ocH:rem[d.name].ocW;
-    if(isArr)return arrhOncallCount[d.name]*10+d.ocBias*0.2+(Math.random()-0.5)*0.2;
-    return -rc*10+d.ocBias*0.3+(Math.random()-0.5)*0.3;
-  }
-
-  // =============================================
-  // PHASE 1: 休日当直を配置
-  // =============================================
-
-  // Step1a: 外勤（八田）確保
-  doctors.filter(d=>d.role==='visiting').forEach(vd=>{
-    const pairs=getWeekendPairs();
-    const sat=visitingWeekSelected[vd.name];
-    let tgt=[];
-    if(sat){const p=pairs.find(p=>p.sat===sat);if(p){if(p.sat)tgt.push(p.sat);if(p.sun)tgt.push(p.sun);}}
-    if(!tgt.length)tgt=heavyDays.slice(-2);
-    tgt.forEach(day=>{schedule[day].tochoku=vd.name;tH[vd.name]++;rem[vd.name].tH--;});
-    if(tgt.length<2)warnings.push(`${vd.name}：土日2連続確保できませんでした`);
-  });
-
-  // Step1b: 各医師の休日当直を均等配置（即時書き込み）
-  const arrhDrs=doctors.filter(d=>d.role==='arrhythmia'&&d.canTochoku);
-  const ischemicDrs=doctors.filter(d=>d.role!=='arrhythmia'&&!visitingSet.has(d.name)&&d.canTochoku);
-  const ischemicSorted=[...ischemicDrs].sort((a,b)=>a.tBias-b.tBias);
-
-  // 不整脈グループ → 虚血グループの順で配置
-  arrhDrs.forEach(d=>{
-    const needed=rem[d.name].tH||0;
-    const done=assignEvenlyImmediate(d, heavyDays, needed, true);
-    if(done<needed)
-      warnings.push(`${d.name}：休日当直${needed}回を確保できませんでした（${done}回）`);
-  });
-
-  ischemicSorted.forEach(d=>{
-    const needed=rem[d.name].tH||0;
-    const done=assignEvenlyImmediate(d, heavyDays, needed, true);
-    if(done<needed)
-      warnings.push(`${d.name}：休日当直${needed}回を確保できませんでした（${done}回）`);
-  });
-
-  // 割り当てられていない休日の警告
-  heavyDays.filter(d=>!schedule[d].tochoku).forEach(day=>{
-    warnings.push(`${day}：休日当直の割り当てなし`);
-  });
-
-  // =============================================
-  // PHASE 2: 休日oncallを配置
-  // =============================================
-  heavyDays.forEach(day=>{
-    const tDoc=schedule[day].tochoku;if(!tDoc)return;
-    const isVisiting=visitingSet.has(tDoc);
-    const isArr=arrhythmiaSet.has(tDoc);
-    const needed=isVisiting?2:1;
-    const prevTochoku=schedule[getPrevDay(day)]?.tochoku;
-    const pool=(isArr||isVisiting)?ischemicOncallPool:doctors.filter(d=>d.canOncall);
-    const avail=pool.filter(dr=>canOc(dr,day,tDoc,true));
-    let preferred=isSunday(day)&&prevTochoku?avail.filter(dr=>dr.name===prevTochoku):[];
-    const rest=avail.filter(dr=>!preferred.includes(dr));
-    const sorted=[...preferred,...rest];
-    sorted.sort((a,b)=>{const ap=preferred.includes(a)?-5:0,bp=preferred.includes(b)?-5:0;return ocScore(a,true,isArr)+ap-(ocScore(b,true,isArr)+bp);});
-    let chosen=sorted.slice(0,needed);
-    if(chosen.length<needed){
-      const fb=pool.filter(dr=>!chosen.find(c=>c.name===dr.name)&&dr.name!==tDoc&&dayState(dr.name,day)!==1&&!isNgPair(tDoc,dr.name));
-      fb.sort((a,b)=>ocScore(a,true,isArr)-ocScore(b,true,isArr));
-      const extra=fb.slice(0,needed-chosen.length);
-      if(extra.length)warnings.push(`${day}：oncall設定回数を超えて割り当てました`);
-      chosen.push(...extra);
-    }
-    schedule[day].oncall=chosen.map(d=>d.name);
-    chosen.forEach(d=>{ocH[d.name]++;rem[d.name].ocH--;if(isArr)arrhOncallCount[d.name]++;});
-    if(chosen.length<needed)warnings.push(`${day}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
-  });
-
-  // =============================================
-  // PHASE 3: 平日当直を配置（均等配置・即時書き込み）
-  // =============================================
-  arrhDrs.forEach(d=>{
-    const needed=rem[d.name].tW||0;
-    const done=assignEvenlyImmediate(d, weekdays, needed, false);
-    if(done<needed)
-      warnings.push(`${d.name}：平日当直${needed}回を確保できませんでした（${done}回）`);
-  });
-
-  ischemicSorted.forEach(d=>{
-    const needed=rem[d.name].tW||0;
-    const done=assignEvenlyImmediate(d, weekdays, needed, false);
-    if(done<needed)
-      warnings.push(`${d.name}：平日当直${needed}回を確保できませんでした（${done}回）`);
-  });
-
-  weekdays.filter(d=>!schedule[d].tochoku).forEach(day=>{
-    warnings.push(`${day}：平日当直の割り当てなし`);
-  });
-
-  // =============================================
-  // PHASE 4: 平日oncallを配置
-  // =============================================
-  weekdays.forEach(day=>{
-    const tDoc=schedule[day].tochoku;if(!tDoc)return;
-    const isVisiting=visitingSet.has(tDoc);
-    const isArr=arrhythmiaSet.has(tDoc);
-    const needed=isVisiting?2:1;
-    const pool=(isArr||isVisiting)?ischemicOncallPool:doctors.filter(d=>d.canOncall);
-    const avail=pool.filter(dr=>canOc(dr,day,tDoc,false));
-    avail.sort((a,b)=>ocScore(a,false,isArr)-ocScore(b,false,isArr));
-    let chosen=avail.slice(0,needed);
-    if(chosen.length<needed){
-      const fb=pool.filter(dr=>!chosen.find(c=>c.name===dr.name)&&dr.name!==tDoc&&dayState(dr.name,day)!==1&&!isNgPair(tDoc,dr.name));
-      fb.sort((a,b)=>ocScore(a,false,isArr)-ocScore(b,false,isArr));
-      const extra=fb.slice(0,needed-chosen.length);
-      if(extra.length)warnings.push(`${day}：oncall設定回数を超えて割り当てました`);
-      chosen.push(...extra);
-    }
-    schedule[day].oncall=chosen.map(d=>d.name);
-    chosen.forEach(d=>{ocW[d.name]++;rem[d.name].ocW--;});
-    if(chosen.length<needed)warnings.push(`${day}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
-  });
-
-  days.forEach(day=>{
-    const s=schedule[day];if(!s?.tochoku)return;
-    s.oncall.forEach(o=>{if(isNgPair(s.tochoku,o))warnings.push(`${day}：${s.tochoku}×${o} NGペア同日`)});
-  });
-
-  Object.assign(_tW,tW);Object.assign(_tH,tH);Object.assign(_ocW,ocW);Object.assign(_ocH,ocH);
-  renderResult(days,tW,tH,ocW,ocH,warnings,arrhythmiaSet,visitingSet);
-}
-function renderResult(days,tW,tH,ocW,ocH,warnings,arrhythmiaSet,visitingSet){
-  const[y,mo]=document.getElementById('target-month').value.split('-').map(Number);
-  const firstDow=new Date(y,mo-1,1).getDay();
-  const offset=firstDow===0?6:firstDow-1;
-  const cells=Array(offset).fill(null).concat(days);
-  let html='';
-  if(warnings.length)html+=`<div class="warn">${warnings.map(w=>`⚠ ${w}`).join('<br>')}</div>`;
-  else html+=`<div class="ok">✓ 設定通りに割り当て完了</div>`;
-
-  const{wdays,heavy}=getMonthDayCounts();
-  const sumT=doctors.reduce((s,d)=>s+(tW[d.name]||0)+(tH[d.name]||0),0);
-  const sumOc=doctors.reduce((s,d)=>s+(ocW[d.name]||0)+(ocH[d.name]||0),0);
-  html+=`<div class="mg">
-    <div class="metric"><div class="lbl">平日</div><div class="val">${wdays}</div></div>
-    <div class="metric"><div class="lbl">土日・重祝日</div><div class="val" style="color:#991b1b">${heavy}</div></div>
-    <div class="metric"><div class="lbl">当直合計</div><div class="val">${sumT}</div></div>
-    <div class="metric"><div class="lbl">oncall合計</div><div class="val">${sumOc}</div></div>
-  </div>`;
-
-  html+=`<div class="legend">
-    <span><span class="legend-sq" style="background:#eff6ff;border:1px solid #bfdbfe"></span>土日</span>
-    <span><span class="legend-sq" style="background:#fff5f0;border:1px solid #fcd5c0"></span>不整脈当直</span>
-    <span><span class="legend-sq" style="background:#f5f0ff;border:1px solid #ddd6fe"></span>外勤当直</span>
-    <span><span class="legend-sq" style="background:#f0fff4;border:1px solid #bbf7d0"></span>祝日診療</span>
-    <span style="color:#2563eb">📞 oncall</span>
-  </div>`;
-
-  html+=`<div class="cal-wrap"><div class="cal-grid">`;
-  ['月','火','水','木','金','土','日'].forEach(d=>html+=`<div class="cal-hd">${d}</div>`);
-  cells.forEach(day=>{
-    if(!day){html+='<div class="cal-day empty"></div>';return}
-    const date=new Date(day+'T00:00:00');
-    const dow=date.getDay(),hol=isHol(day),heavy=isHeavy(day),cHol=isClinicHol(day);
-    const s=schedule[day]||{tochoku:null,oncall:[]};
-    const isV=s.tochoku&&visitingSet.has(s.tochoku),isA=s.tochoku&&arrhythmiaSet.has(s.tochoku);
-    let bg=heavy?'day-we':'';
-    if(cHol)bg='day-ch';if(isA)bg='day-arr';if(isV)bg='day-vis';
-    const needed=isV?2:1,shortage=!s.tochoku||(s.oncall.length<needed);
-    const typeLabel=cHol?'診祝':heavy?'土日':'平';
-    const numColor=dow===6?'#1d4ed8':(dow===0||hol)?'#991b1b':'';
-    html+=`<div class="cal-day ${bg}${shortage?' shortage':''}">
-      <div class="dn"><span style="font-size:12px;font-weight:700${numColor?`;color:${numColor}`:''}">${date.getDate()}</span>
-        <span class="dtype ${heavy&&!cHol?'we':cHol?'ch':''}">${typeLabel}</span>
-      </div>
-      <div class="dt"><span class="cell-edit" data-doctor="${s.tochoku||''}" onmouseenter="highlightDoctor('${s.tochoku||''}')" onmouseleave="highlightDoctor(null)" onclick="showDropdown(event,'${day}','tochoku',0)" title="クリックして変更">${s.tochoku||'—'}</span></div>
-      <div class="oc">${s.oncall.map((n,i)=>`<span class="cell-edit" data-doctor="${n}" onmouseenter="highlightDoctor('${n}')" onmouseleave="highlightDoctor(null)" onclick="showDropdown(event,'${day}','oncall',${i})" title="クリックして変更">📞${n}</span>`).join(' ')}${s.oncall.length===0?`<span class="cell-edit" style="color:#bbb;font-size:9px" onclick="showAddOncall(event,'${day}')" title="oncallを追加">＋</span>`:isV?`<span class="cell-edit" style="color:#bbb;font-size:9px" onclick="showAddOncall(event,'${day}')" title="oncallを追加"> ＋</span>`:''}</div>
-    </div>`;
-  });
-  html+='</div></div>';
-
-  // 集計表（合計列追加）
-  html+=`<div class="card"><p class="stitle" style="margin-bottom:8px">個人別集計</p>
-  <div style="overflow-x:auto"><table class="cfg-table"><thead><tr>
-    <th class="left">医師</th><th>平日<br>当直</th><th>休日<br>当直</th><th>当直計</th><th>平日<br>oncall</th><th>休日<br>oncall</th><th>oncall計</th>
-  </tr></thead><tbody>`;
-  doctors.forEach(d=>{
-    const cfg=monthConfig[d.name]||{tW:0,tH:0,ocW:0,ocH:0};
-    const tw=tW[d.name]||0,th=tH[d.name]||0,ow=ocW[d.name]||0,oh=ocH[d.name]||0;
-    const tc=tw+th,oc=ow+oh;
-    const cfgTc=(cfg.tW||0)+(cfg.tH||0),cfgOc=(cfg.ocW||0)+(cfg.ocH||0);
-    const cell=(v,t)=>{
-      const col=v===t?'#166534':v<t?'#b45309':'#b91c1c';
-      const bg=v===t?'':'';
-      return `<td style="text-align:center"><span style="font-weight:600;color:${col}">${v}</span><span style="font-size:10px;color:#aaa">/${t}</span></td>`;
-    };
-    html+=`<tr>
-      <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d.color};margin-right:5px"></span><span class="name-tag hoverable" onmouseenter="highlightDoctor('${d.name}')" onmouseleave="highlightDoctor(null)">${d.name}</span></td>
-      ${cell(tw,cfg.tW)}${cell(th,cfg.tH)}
-      <td style="text-align:center;background:#f8f8f8"><span style="font-weight:700;color:${tc===cfgTc?'#166534':tc<cfgTc?'#b45309':'#b91c1c'}">${tc}</span><span style="font-size:10px;color:#aaa">/${cfgTc}</span></td>
-      ${cell(ow,cfg.ocW)}${cell(oh,cfg.ocH)}
-      <td style="text-align:center;background:#f8f8f8"><span style="font-weight:700;color:${oc===cfgOc?'#166534':oc<cfgOc?'#b45309':'#b91c1c'}">${oc}</span><span style="font-size:10px;color:#aaa">/${cfgOc}</span></td>
-    </tr>`;
-  });
-  // 合計行・必要数行
-  const sumTW=doctors.reduce((s,d)=>s+(tW[d.name]||0),0);
-  const sumTH=doctors.reduce((s,d)=>s+(tH[d.name]||0),0);
-  const sumOcW=doctors.reduce((s,d)=>s+(ocW[d.name]||0),0);
-  const sumOcH=doctors.reduce((s,d)=>s+(ocH[d.name]||0),0);
-  const sumTC=sumTW+sumTH, sumOcC=sumOcW+sumOcH;
-  const cfgSumTW=doctors.reduce((s,d)=>s+(monthConfig[d.name]?.tW||0),0);
-  const cfgSumTH=doctors.reduce((s,d)=>s+(monthConfig[d.name]?.tH||0),0);
-  const cfgSumOcW=doctors.reduce((s,d)=>s+(monthConfig[d.name]?.ocW||0),0);
-  const cfgSumOcH=doctors.reduce((s,d)=>s+(monthConfig[d.name]?.ocH||0),0);
-  const cfgSumTC=cfgSumTW+cfgSumTH, cfgSumOcC=cfgSumOcW+cfgSumOcH;
-  const visitingHeavy2=getVisitingHeavyDays();
-  const needOcH2=heavy+visitingHeavy2;
-  const sc=(v,t)=>`<span style="font-weight:700;color:${v===t?'#166534':v<t?'#b45309':'#b91c1c'}">${v}</span><span style="font-size:10px;color:#aaa">/${t}</span>`;
-  html+=`<tfoot>
-    <tr style="border-top:2px solid #eee;background:#f8f8f8">
-      <td class="name" style="font-weight:600;padding:6px 5px">実績合計</td>
-      <td style="text-align:center">${sc(sumTW,cfgSumTW)}</td>
-      <td style="text-align:center">${sc(sumTH,cfgSumTH)}</td>
-      <td style="text-align:center;background:#f0f0f0"><span style="font-weight:700;color:${sumTC===cfgSumTC?'#166534':sumTC<cfgSumTC?'#b45309':'#b91c1c'}">${sumTC}</span><span style="font-size:10px;color:#aaa">/${cfgSumTC}</span></td>
-      <td style="text-align:center">${sc(sumOcW,cfgSumOcW)}</td>
-      <td style="text-align:center">${sc(sumOcH,cfgSumOcH)}</td>
-      <td style="text-align:center;background:#f0f0f0"><span style="font-weight:700;color:${sumOcC===cfgSumOcC?'#166534':sumOcC<cfgSumOcC?'#b45309':'#b91c1c'}">${sumOcC}</span><span style="font-size:10px;color:#aaa">/${cfgSumOcC}</span></td>
-    </tr>
-    <tr style="color:#888">
-      <td class="name" style="font-size:11px;padding:4px 5px">必要数</td>
-      <td style="text-align:center;font-size:11px">${wdays}</td>
-      <td style="text-align:center;font-size:11px">${heavy}</td>
-      <td style="text-align:center;font-size:11px;background:#f8f8f8">${wdays+heavy}</td>
-      <td style="text-align:center;font-size:11px">${wdays}</td>
-      <td style="text-align:center;font-size:11px">${needOcH2}</td>
-      <td style="text-align:center;font-size:11px;background:#f8f8f8">${wdays+needOcH2}</td>
-    </tr>
-  </tfoot>`;
-  html+=`</tbody></table></div>
-  <p style="font-size:11px;color:#999;margin-top:8px">緑=設定通り　黄=不足　赤=超過</p></div>`;
-
-  html+=`<button class="btn primary" style="width:100%;height:42px;margin-bottom:8px" onclick="exportCSV()">Excelダウンロード（CSV）↓</button>`;
-  html+=`<button class="btn" style="width:100%;height:36px" onclick="generate()">再生成</button>`;
-  document.getElementById('result-area').innerHTML=html;
 }
 
+// --- CSVダウンロード ---
 function exportCSV(){
   const days=getDays();
   const m=document.getElementById('target-month').value;
   const[y,mo]=m.split('-').map(Number);
-  let csv=`\uFEFF当直表 ${y}年${mo}月\n日付,曜日,区分,当直,oncall1,oncall2\n`;
+  let csv=`﻿当直表 ${y}年${mo}月
+日付,曜日,区分,当直,oncall
+`;
   days.forEach(day=>{
     const date=new Date(day+'T00:00:00');
-    const heavy=isHeavy(day),cHol=isClinicHol(day);
     const s=schedule[day]||{tochoku:null,oncall:[]};
-    csv+=`${date.getMonth()+1}/${date.getDate()},${dowLabel(day)},${heavy?'土日・重祝日':(cHol?'祝日診療':'平日')},${s.tochoku||''},${s.oncall[0]||''},${s.oncall[1]||''}\n`;
+    const tMem=fixedConfig.members.find(m=>m.id===s.tochoku);
+    const ocNames=s.oncall.map(oid=>fixedConfig.members.find(m=>m.id===oid)?.name||oid).join('・');
+    const type=isHeavy(day)?(isClinicHol(day)?'祝日診療':'土日・重祝日'):'平日';
+    csv+=`${date.getMonth()+1}/${date.getDate()},${dowLabel(day)},${type},${tMem?.name||''},${ocNames}
+`;
   });
-  csv+=`\n個人別集計\n医師,平日当直,休日当直,当直計,平日oncall,休日oncall,oncall計\n`;
-  doctors.forEach(d=>{
-    const tw=_tW[d.name]||0,th=_tH[d.name]||0,ow=_ocW[d.name]||0,oh=_ocH[d.name]||0;
-    csv+=`${d.name},${tw},${th},${tw+th},${ow},${oh},${ow+oh}\n`;
+  csv+=`
+個人別集計
+医師,平日当直,休日当直,当直計,平日oncall,休日oncall,oncall計
+`;
+  fixedConfig.members.forEach(mem=>{
+    const{tW,tH}=countT(mem.id);const{ocW,ocH}=countOC(mem.id);
+    csv+=`${mem.name},${tW},${tH},${tW+tH},${ocW},${ocH},${ocW+ocH}
+`;
   });
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=`当直表_${y}年${mo}月.csv`;a.click();URL.revokeObjectURL(url);
 }
 
-renderDoctors();
-computeMonthConfig();
-updateMonthInfoBoxes();
-renderPreCheck();
-renderHolType();
-renderVisitingWeek();
+// =====================
+// INIT
+// =====================
+loadFixedConfig();
+renderMembers();
+
+// 対象月を来月に初期設定
+const now=new Date();
+const nextM=new Date(now.getFullYear(),now.getMonth()+1,1);
+document.getElementById('target-month').value=`${nextM.getFullYear()}-${String(nextM.getMonth()+1).padStart(2,'0')}`;
+onMonthChange();
 </script>
 </body>
 </html>
