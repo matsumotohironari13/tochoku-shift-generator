@@ -936,11 +936,13 @@ function renderPrevMonth(){
   if(!m){el.style.display='none';return;}
   el.style.display='block';
   const[y,mo]=m.split('-').map(Number);
-  const prevMonthEnd=new Date(y,mo-1,0);
+  const prevMonthEnd=new Date(y,mo-1,0); // 前月末日
   const inputs=document.getElementById('prev-month-inputs');
   const prevDays=[];
   for(let i=3;i>=0;i--){
-    const d=new Date(prevMonthEnd);d.setDate(d.getDate()-i);
+    // 前月末日から i日前を計算（累積せず毎回prevMonthEndから引く）
+    const d=new Date(prevMonthEnd.getTime());
+    d.setDate(prevMonthEnd.getDate()-i);
     prevDays.push(d.toISOString().slice(0,10));
   }
   inputs.innerHTML=prevDays.map(day=>{
