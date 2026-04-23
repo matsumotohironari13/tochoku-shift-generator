@@ -1873,7 +1873,7 @@ function renderSummary(){
     const cfgTW=monthlyConfig[mem.id]?.tW||0,cfgTH=monthlyConfig[mem.id]?.tH||0;
     const cfgOW=monthlyConfig[mem.id]?.ocW||0,cfgOH=monthlyConfig[mem.id]?.ocH||0;
     const color=getMemberColor(mem);
-    const c=(v,t)=>v===t?'var(--success)':v>t?'var(--danger)':'var(--warn)';
+    const c=(v,t)=>v===t?'var(--text)':v>t?'var(--danger)':'var(--accent)';
     html+=`<tr>
       <td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>
         <span onmouseenter="highlightDoctor('${mem.id}')" onmouseleave="highlightDoctor(null)" style="cursor:default">${mem.name}</span>
