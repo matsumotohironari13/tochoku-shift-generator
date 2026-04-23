@@ -940,10 +940,11 @@ function renderPrevMonth(){
   const inputs=document.getElementById('prev-month-inputs');
   const prevDays=[];
   for(let i=3;i>=0;i--){
-    // 前月末日から i日前を計算（累積せず毎回prevMonthEndから引く）
+    // 前月末日から i日前を計算（タイムゾーン対策でローカル日付を使用）
     const d=new Date(prevMonthEnd.getTime());
     d.setDate(prevMonthEnd.getDate()-i);
-    prevDays.push(d.toISOString().slice(0,10));
+    const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    prevDays.push(ds);
   }
   inputs.innerHTML=prevDays.map(day=>{
     const date=new Date(day+'T00:00:00');
