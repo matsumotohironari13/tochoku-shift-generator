@@ -251,7 +251,7 @@ tr:hover td{background:var(--bg)}
           <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.7">各医師に希望休を入力してもらうためのリンクを生成します。LINEでそのまま送れます。</p>
           <div class="field">
             <label class="field-label">holiday-input.html のURL</label>
-            <input type="text" id="holiday-input-url" placeholder="https://matsumoto-13.github.io/tochoku-shift-generator/holiday-input.html" style="font-size:12px">
+            <input type="text" id="holiday-input-url" placeholder="https://matsumotohironari13.github.io/tochoku-shift-generator/holiday-input.html" style="font-size:12px">
           </div>
           <button class="btn btn-secondary" onclick="exportMemberConfig()">🔗 配布リンクを生成</button>
           <div id="member-export-area" style="margin-top:12px;display:none">
@@ -2074,7 +2074,7 @@ function exportMemberConfig(){
   const m = document.getElementById('target-month').value;
   if(!m){alert('対象月を選択してください');return;}
   const baseUrl = document.getElementById('holiday-input-url').value.trim()
-    || 'https://matsumoto-13.github.io/tochoku-shift-generator/holiday-input.html';
+    || 'https://matsumotohironari13.github.io/tochoku-shift-generator/holiday-input.html';
   const yymm = monthToYYMM(m);
   const memberStr = fixedConfig.members.map(mem=>`${mem.id}:${mem.name}`).join(',');
   const raw = `${yymm}|${memberStr}`;
