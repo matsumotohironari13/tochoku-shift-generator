@@ -2078,7 +2078,7 @@ function exportMemberConfig(){
   const yymm = monthToYYMM(m);
   const memberStr = fixedConfig.members.map(mem=>`${mem.id}:${mem.name}`).join(',');
   const raw = `${yymm}|${memberStr}`;
-  const code = btoa(unescape(encodeURIComponent(raw)));
+  const code = btoa(encodeURIComponent(raw));
   const link = `${baseUrl}?c=${code}`;
   document.getElementById('member-export-area').style.display='block';
   document.getElementById('member-export-code').value=link;
@@ -2098,7 +2098,7 @@ function importHolidayCode(){
   const resultEl = document.getElementById('import-result');
   if(!code){resultEl.innerHTML='<span style="color:var(--danger)">コードを入力してください</span>';return;}
   try{
-    const raw = decodeURIComponent(escape(atob(code)));
+    const raw = decodeURIComponent(atob(code));
     const parts = raw.split('|');
     if(parts.length !== 4) throw new Error('コードの形式が正しくありません');
     const [memberId, yymm, offStr, oncStr] = parts;
