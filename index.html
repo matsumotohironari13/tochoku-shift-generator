@@ -247,12 +247,16 @@ tr:hover td{background:var(--bg)}
         </div>
 
         <div class="card">
-          <div class="card-title"><span class="icon">📤</span>希望休収集用コードの配布</div>
-          <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.7">各医師に希望休を入力してもらうため、メンバー設定コードを生成します。このコードを<code>holiday-input.html</code>と一緒に各医師に配布してください。</p>
-          <button class="btn btn-secondary" onclick="exportMemberConfig()">📋 メンバー設定コードを生成</button>
+          <div class="card-title"><span class="icon">📤</span>希望休収集リンクの配布</div>
+          <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.7">各医師に希望休を入力してもらうためのリンクを生成します。LINEでそのまま送れます。</p>
+          <div class="field">
+            <label class="field-label">holiday-input.html のURL</label>
+            <input type="text" id="holiday-input-url" placeholder="https://matsumoto-13.github.io/tochoku-shift-generator/holiday-input.html" style="font-size:12px">
+          </div>
+          <button class="btn btn-secondary" onclick="exportMemberConfig()">🔗 配布リンクを生成</button>
           <div id="member-export-area" style="margin-top:12px;display:none">
-            <div style="font-size:12px;color:var(--text-2);margin-bottom:6px">以下のコードをコピーして配布してください：</div>
-            <textarea id="member-export-code" style="width:100%;height:80px;font-family:monospace;font-size:11px" readonly></textarea>
+            <div style="font-size:12px;color:var(--text-2);margin-bottom:6px">以下のリンクをLINEで送ってください：</div>
+            <textarea id="member-export-code" style="width:100%;height:60px;font-family:monospace;font-size:11px" readonly></textarea>
             <button class="btn btn-secondary btn-sm" onclick="copyMemberCode()" style="margin-top:6px">📋 コピー</button>
           </div>
         </div>
@@ -2069,12 +2073,15 @@ function yymmToMonth(s){ return '20'+s.slice(0,2)+'-'+s.slice(2); }
 function exportMemberConfig(){
   const m = document.getElementById('target-month').value;
   if(!m){alert('対象月を選択してください');return;}
+  const baseUrl = document.getElementById('holiday-input-url').value.trim()
+    || 'https://matsumoto-13.github.io/tochoku-shift-generator/holiday-input.html';
   const yymm = monthToYYMM(m);
   const memberStr = fixedConfig.members.map(mem=>`${mem.id}:${mem.name}`).join(',');
   const raw = `${yymm}|${memberStr}`;
   const code = btoa(unescape(encodeURIComponent(raw)));
+  const link = `${baseUrl}?c=${code}`;
   document.getElementById('member-export-area').style.display='block';
-  document.getElementById('member-export-code').value=code;
+  document.getElementById('member-export-code').value=link;
 }
 
 function copyMemberCode(){
