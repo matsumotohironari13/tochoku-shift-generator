@@ -247,6 +247,17 @@ tr:hover td{background:var(--bg)}
         </div>
 
         <div class="card">
+          <div class="card-title"><span class="icon">📤</span>希望休収集用コードの配布</div>
+          <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.7">各医師に希望休を入力してもらうため、メンバー設定コードを生成します。このコードを<code>holiday-input.html</code>と一緒に各医師に配布してください。</p>
+          <button class="btn btn-secondary" onclick="exportMemberConfig()">📋 メンバー設定コードを生成</button>
+          <div id="member-export-area" style="margin-top:12px;display:none">
+            <div style="font-size:12px;color:var(--text-2);margin-bottom:6px">以下のコードをコピーして配布してください：</div>
+            <textarea id="member-export-code" style="width:100%;height:80px;font-family:monospace;font-size:11px" readonly></textarea>
+            <button class="btn btn-secondary btn-sm" onclick="copyMemberCode()" style="margin-top:6px">📋 コピー</button>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="card-title"><span class="icon">🚫</span>同日NGペア設定</div>
           <div class="page-desc" style="margin-bottom:12px">特定の2人が同じ日に当直・oncallに入れない組み合わせを設定します。</div>
           <div id="ng-pairs-list"></div>
@@ -465,6 +476,17 @@ tr:hover td{background:var(--bg)}
           <div class="page-title">希望休入力</div>
           <div class="page-desc">各メンバーの希望休を入力します。タップして状態を切り替えます。入力は自動保存されます。</div>
         </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-title"><span class="icon">📥</span>医師からのコードをインポート</div>
+          <p style="font-size:13px;color:var(--text-2);margin-bottom:10px">医師から受け取ったコードを貼り付けてインポートします。</p>
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <textarea id="import-code-input" placeholder="コードをここに貼り付け..." style="flex:1;height:60px;font-family:monospace;font-size:11px"></textarea>
+            <button class="btn btn-primary" onclick="importHolidayCode()" style="white-space:nowrap">インポート</button>
+          </div>
+          <div id="import-result" style="margin-top:8px;font-size:12px"></div>
+        </div>
+
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
           <span style="display:flex;align-items:center;gap:6px;font-size:12px">
             <span style="display:inline-block;width:28px;height:20px;border-radius:20px;background:var(--danger)"></span>休み
@@ -2033,6 +2055,67 @@ function exportCSV(){
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=`当直表_${y}年${mo}月.csv`;a.click();URL.revokeObjectURL(url);
+}
+
+// =====================
+// MEMBER CONFIG EXPORT / HOLIDAY IMPORT
+// =====================
+
+// コード形式: YYMM|memberID:名前,... (メンバー設定)
+// コード形式: memberID|YYMM|休み日,|oncallのみ日, (希望休)
+function monthToYYMM(m){ return m.replace('-','').slice(2); }
+function yymmToMonth(s){ return '20'+s.slice(0,2)+'-'+s.slice(2); }
+
+function exportMemberConfig(){
+  const m = document.getElementById('target-month').value;
+  if(!m){alert('対象月を選択してください');return;}
+  const yymm = monthToYYMM(m);
+  const memberStr = fixedConfig.members.map(mem=>`${mem.id}:${mem.name}`).join(',');
+  const raw = `${yymm}|${memberStr}`;
+  const code = btoa(unescape(encodeURIComponent(raw)));
+  document.getElementById('member-export-area').style.display='block';
+  document.getElementById('member-export-code').value=code;
+}
+
+function copyMemberCode(){
+  const ta = document.getElementById('member-export-code');
+  ta.select();
+  navigator.clipboard?.writeText(ta.value).catch(()=>document.execCommand('copy'));
+  const btn = event.target;
+  btn.textContent='✓ コピーしました';
+  setTimeout(()=>btn.textContent='📋 コピー', 2000);
+}
+
+function importHolidayCode(){
+  const code = document.getElementById('import-code-input').value.trim();
+  const resultEl = document.getElementById('import-result');
+  if(!code){resultEl.innerHTML='<span style="color:var(--danger)">コードを入力してください</span>';return;}
+  try{
+    const raw = decodeURIComponent(escape(atob(code)));
+    const parts = raw.split('|');
+    if(parts.length !== 4) throw new Error('コードの形式が正しくありません');
+    const [memberId, yymm, offStr, oncStr] = parts;
+    const month = yymmToMonth(yymm);
+    const m = document.getElementById('target-month').value;
+    if(month !== m) throw new Error(`対象月が一致しません（コード:${month}、現在:${m}）`);
+    const mem = fixedConfig.members.find(m=>m.id===memberId);
+    if(!mem) throw new Error(`メンバーが見つかりません: ${memberId}`);
+    // 日付リストを復元
+    if(!holidays[memberId]) holidays[memberId]={};
+    // 既存をクリアして上書き
+    Object.keys(holidays[memberId]).forEach(k=>delete holidays[memberId][k]);
+    const[y,mo]=month.split('-').map(Number);
+    const pad = d=>`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if(offStr) offStr.split(',').filter(Boolean).forEach(d=>holidays[memberId][pad(+d)]=1);
+    if(oncStr) oncStr.split(',').filter(Boolean).forEach(d=>holidays[memberId][pad(+d)]=2);
+    const total=(offStr?offStr.split(',').filter(Boolean).length:0)+(oncStr?oncStr.split(',').filter(Boolean).length:0);
+    saveMonthlyConfig();
+    renderHolidays();
+    resultEl.innerHTML=`<span style="color:var(--success)">✓ ${mem.name}の希望休をインポートしました（${total}日）</span>`;
+    document.getElementById('import-code-input').value='';
+  }catch(e){
+    resultEl.innerHTML=`<span style="color:var(--danger)">エラー：${e.message}</span>`;
+  }
 }
 
 // =====================
