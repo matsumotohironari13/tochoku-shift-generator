@@ -170,7 +170,7 @@ function monthToYYMM(m){ return m.replace('-','').slice(2); }
 function yymmToMonth(s){ return '20'+s.slice(0,2)+'-'+s.slice(2); }
 
 function parseConfig(code){
-  const raw=decodeURIComponent(escape(atob(code)));
+  const raw=decodeURIComponent(atob(code));
   const pipeIdx=raw.indexOf('|');
   if(pipeIdx<0)throw new Error('コードの形式が正しくありません');
   const yymm=raw.slice(0,pipeIdx);
@@ -256,7 +256,7 @@ function goToStep3(){
   const oncDayNums=Object.entries(inputHolidays).filter(([,v])=>v===2)
     .map(([d])=>new Date(d+'T00:00:00').getDate()).sort((a,b)=>a-b);
   const raw=`${selectedMemberId}|${yymm}|${offDayNums.join(',')}|${oncDayNums.join(',')}`;
-  const code=btoa(unescape(encodeURIComponent(raw)));
+  const code=btoa(encodeURIComponent(raw));
   document.getElementById('output-code').textContent=code;
   // 確認内容
   const offLabels=offDayNums.map(d=>{
