@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>希望休入力</title>
+<style>
+:root{
+  --bg:#F7F6F3;--surface:#FFFFFF;--border:#E5E3DE;--border-strong:#C8C4BC;
+  --text:#1C1917;--text-2:#6B6760;--text-3:#9C9994;
+  --accent:#2D5BE3;--accent-light:#EEF2FC;
+  --danger:#DC2626;--warn:#D97706;--success:#16A34A;
+  --radius:10px;--radius-sm:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+.container{max-width:600px;margin:0 auto;padding:24px 16px}
+.header{text-align:center;margin-bottom:28px}
+.header h1{font-size:20px;font-weight:700;margin-bottom:4px}
+.header p{font-size:13px;color:var(--text-2)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.card-title{font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.btn{height:44px;padding:0 20px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;border:none;width:100%;font-family:inherit;transition:all .12s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#1E3FA0}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border-strong)}.btn-secondary:hover{background:var(--bg)}
+.btn-sm{height:36px;font-size:13px;width:auto;padding:0 14px}
+textarea{width:100%;border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:10px;font-size:12px;font-family:monospace;resize:vertical;outline:none}
+textarea:focus{border-color:var(--accent)}
+select{width:100%;height:48px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:0 12px;font-size:15px;background:var(--surface);color:var(--text);outline:none;font-family:inherit}
+select:focus{border-color:var(--accent)}
+.chip-grid{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.day-chip{padding:6px 10px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text-2);user-select:none;-webkit-user-select:none;transition:all .1s;font-weight:500}
+.day-chip.we{color:var(--text);font-weight:600}
+.day-chip.off{background:var(--danger);color:#fff;border-color:var(--danger)}
+.day-chip.oncall-only{background:var(--warn);color:#fff;border-color:var(--warn)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2)}
+.legend-dot{width:24px;height:18px;border-radius:20px}
+.info{background:var(--accent-light);border:1px solid #BFD0F7;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#1E3FA0;margin-bottom:14px;line-height:1.6}
+.warn-box{background:#FFFBEB;border:1px solid #FDE68A;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#92400E;margin-bottom:12px}
+.success-box{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:#166534;margin-bottom:12px}
+.step{display:none}.step.active{display:block}
+.step-indicator{display:flex;justify-content:center;gap:8px;margin-bottom:24px}
+.step-dot{width:8px;height:8px;border-radius:50%;background:var(--border-strong)}
+.step-dot.active{background:var(--accent)}
+.code-output{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:monospace;font-size:11px;word-break:break-all;line-height:1.6;margin-bottom:10px;max-height:120px;overflow-y:auto}
+.badge-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500}
+.badge-off{background:var(--danger);color:#fff}
+.badge-oncall{background:var(--warn);color:#fff}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🗓️ 希望休入力</h1>
+    <p>来月のシフト希望を入力してください</p>
+  </div>
+
+  <div class="step-indicator">
+    <div class="step-dot active" id="dot-1"></div>
+    <div class="step-dot" id="dot-1-b"></div>
+  </div>
+
+  <!-- エラー表示 -->
+  <div id="load-error" style="display:none" class="warn-box">
+    URLが正しくありません。シフト調整者から受け取ったリンクを使用してください。
+  </div>
+
+  <!-- Step2: 名前選択＋希望休入力 -->
+  <div class="step" id="step-1">
+    <div class="card">
+      <div class="card-title">👤 ステップ2：名前を選択</div>
+      <select id="member-select" onchange="onMemberChange()">
+        <option value="">— 名前を選んでください —</option>
+      </select>
+    </div>
+
+    <div id="holiday-section" style="display:none">
+      <div class="info" id="month-info-box"></div>
+
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--danger)"></div>休み
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--warn)"></div>oncallのみ
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--bg);border:1px solid var(--border)"></div>通常（3回でリセット）
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📅 希望を入力（タップで切り替え）</div>
+        <div class="chip-grid" id="day-chips"></div>
+        <div class="badge-row" id="summary-badges" style="margin-top:12px"></div>
+      </div>
+
+      <button class="btn btn-primary" onclick="goToStep3()">コードを生成 →</button>
+    </div>
+  </div>
+
+  <!-- Step3: コード生成・コピー -->
+  <div class="step" id="step-2">
+    <div class="card">
+      <div class="card-title">✅ ステップ3：コードをコピーして送信</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;line-height:1.7">
+        以下のコードをコピーして、シフト調整者に<strong>LINEで送ってください</strong>。
+      </p>
+      <div class="code-output" id="output-code"></div>
+      <button class="btn btn-primary" onclick="copyCode()" id="copy-btn">📋 コードをコピー</button>
+      <button class="btn btn-secondary" onclick="goBack()" style="margin-top:8px">← 修正する</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 入力内容の確認</div>
+      <div id="confirm-content" style="font-size:13px;line-height:2"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let configData = null;
+let selectedMemberId = null;
+let inputHolidays = {}; // {day: 0|1|2}
+
+const DOW_LABELS = ['日','月','火','水','木','金','土'];
+const JA_HOL = {
+  '2025-01-01':true,'2025-01-13':true,'2025-02-11':false,'2025-02-23':false,'2025-03-20':false,
+  '2025-04-29':false,'2025-05-03':true,'2025-05-04':true,'2025-05-05':false,'2025-05-06':false,
+  '2025-07-21':false,'2025-08-11':true,'2025-09-15':false,'2025-09-23':false,
+  '2025-10-13':false,'2025-11-03':false,'2025-11-23':false,
+  '2026-01-01':true,'2026-01-12':true,'2026-02-11':false,'2026-02-23':false,'2026-03-20':false,
+  '2026-04-29':false,'2026-05-03':true,'2026-05-04':true,'2026-05-05':false,'2026-05-06':false,
+  '2026-07-20':false,'2026-08-11':true,'2026-09-21':false,'2026-09-22':false,'2026-09-23':false,
+  '2026-10-12':false,'2026-11-03':false,'2026-11-23':false,
+  '2027-01-01':true,'2027-01-11':false,'2027-02-11':false,'2027-02-23':false,'2027-03-22':false,
+  '2027-04-29':false,'2027-05-03':true,'2027-05-04':true,'2027-05-05':false,
+};
+
+function isHol(s){return s in JA_HOL}
+function getDow(s){return new Date(s+'T00:00:00').getDay()}
+function isHeavy(s){const d=getDow(s);return d===6||d===0||(isHol(s)&&JA_HOL[s])}
+function dowLabel(s){return DOW_LABELS[getDow(s)]}
+function fmtDate(s){const d=new Date(s+'T00:00:00');return`${d.getMonth()+1}/${d.getDate()}`}
+
+function getDays(month){
+  if(!month)return[];
+  const[y,mo]=month.split('-').map(Number);
+  const days=[];const d=new Date(y,mo-1,1);
+  while(d.getMonth()===mo-1){
+    const ds=`${y}-${String(mo).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    days.push(ds);d.setDate(d.getDate()+1);
+  }
+  return days;
+}
+
+function switchStep(n){
+  document.querySelectorAll('.step').forEach((s,i)=>s.classList.toggle('active',i===n-1));
+  const dots=document.querySelectorAll('.step-dot');
+  dots.forEach((d,i)=>d.classList.toggle('active',i===n-1));
+}
+
+function monthToYYMM(m){ return m.replace('-','').slice(2); }
+function yymmToMonth(s){ return '20'+s.slice(0,2)+'-'+s.slice(2); }
+
+function monthToYYMM(m){ return m.replace('-','').slice(2); }
+function yymmToMonth(s){ return '20'+s.slice(0,2)+'-'+s.slice(2); }
+
+function parseConfig(code){
+  const raw=decodeURIComponent(escape(atob(code)));
+  const pipeIdx=raw.indexOf('|');
+  if(pipeIdx<0)throw new Error('コードの形式が正しくありません');
+  const yymm=raw.slice(0,pipeIdx);
+  const month=yymmToMonth(yymm);
+  const memberStr=raw.slice(pipeIdx+1);
+  const members=memberStr.split(',').map(s=>{
+    const ci=s.indexOf(':');
+    return{id:s.slice(0,ci),name:s.slice(ci+1)};
+  });
+  return{month,members};
+}
+
+function loadConfig(){
+  const params=new URLSearchParams(window.location.search);
+  const code=params.get('c');
+  const errEl=document.getElementById('load-error');
+  if(!code){
+    if(errEl)errEl.style.display='block';
+    return;
+  }
+  try{
+    configData=parseConfig(code);
+    const sel=document.getElementById('member-select');
+    sel.innerHTML='<option value="">— 名前を選んでください —</option>'+
+      configData.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+    const[y,mo]=configData.month.split('-').map(Number);
+    document.getElementById('month-info-box').textContent=`対象月：${y}年${mo}月（全${getDays(configData.month).length}日）`;
+    switchStep(1);
+  }catch(e){
+    if(errEl){errEl.style.display='block';errEl.textContent=`エラー：${e.message}`;}
+  }
+}
+
+
+function onMemberChange(){
+  const sel=document.getElementById('member-select');
+  selectedMemberId=sel.value;
+  if(!selectedMemberId){document.getElementById('holiday-section').style.display='none';return;}
+  inputHolidays={};
+  document.getElementById('holiday-section').style.display='block';
+  renderChips();
+}
+
+function renderChips(){
+  const days=getDays(configData.month);
+  const grid=document.getElementById('day-chips');
+  grid.innerHTML=days.map(day=>{
+    const st=inputHolidays[day]||0;
+    const dow=getDow(day);
+    const lbl=fmtDate(day)+'('+dowLabel(day)+(isHol(day)?'祝':'')+')';
+    const isW=dow===6||dow===0||isHol(day);
+    const cls='day-chip'+(st===1?' off':st===2?' oncall-only':'')+(isW?' we':'');
+    return`<span class="${cls}" onclick="cycleChip('${day}',this)">${lbl}</span>`;
+  }).join('');
+  updateBadges();
+}
+
+function cycleChip(day,el){
+  const cur=inputHolidays[day]||0;
+  const next=(cur+1)%3;
+  if(next===0)delete inputHolidays[day];else inputHolidays[day]=next;
+  const dow=getDow(day);
+  const isW=dow===6||dow===0||isHol(day);
+  el.className='day-chip'+(next===1?' off':next===2?' oncall-only':'')+(isW?' we':'');
+  updateBadges();
+}
+
+function updateBadges(){
+  const offDays=Object.entries(inputHolidays).filter(([,v])=>v===1).map(([d])=>d);
+  const oncDays=Object.entries(inputHolidays).filter(([,v])=>v===2).map(([d])=>d);
+  const el=document.getElementById('summary-badges');
+  el.innerHTML=(offDays.length?`<span class="badge badge-off">休み ${offDays.length}日</span>`:'')+
+    (oncDays.length?`<span class="badge badge-oncall">oncallのみ ${oncDays.length}日</span>`:'');
+}
+
+function goToStep3(){
+  const mem=configData.members.find(m=>m.id===selectedMemberId);
+  if(!mem){alert('名前を選択してください');return;}
+  // 短縮コード生成: memberID|YYMM|休み日カンマ|oncallのみ日カンマ
+  const yymm=monthToYYMM(configData.month);
+  const offDayNums=Object.entries(inputHolidays).filter(([,v])=>v===1)
+    .map(([d])=>new Date(d+'T00:00:00').getDate()).sort((a,b)=>a-b);
+  const oncDayNums=Object.entries(inputHolidays).filter(([,v])=>v===2)
+    .map(([d])=>new Date(d+'T00:00:00').getDate()).sort((a,b)=>a-b);
+  const raw=`${selectedMemberId}|${yymm}|${offDayNums.join(',')}|${oncDayNums.join(',')}`;
+  const code=btoa(unescape(encodeURIComponent(raw)));
+  document.getElementById('output-code').textContent=code;
+  // 確認内容
+  const offLabels=offDayNums.map(d=>{
+    const s=`${configData.month.slice(0,4)}-${configData.month.slice(5,7)}-${String(d).padStart(2,'0')}`;
+    return`${fmtDate(s)}(${dowLabel(s)})`;
+  });
+  const oncLabels=oncDayNums.map(d=>{
+    const s=`${configData.month.slice(0,4)}-${configData.month.slice(5,7)}-${String(d).padStart(2,'0')}`;
+    return`${fmtDate(s)}(${dowLabel(s)})`;
+  });
+  const[y,mo]=configData.month.split('-').map(Number);
+  document.getElementById('confirm-content').innerHTML=
+    `<div><strong>名前：</strong>${mem.name}</div>`+
+    `<div><strong>対象月：</strong>${y}年${mo}月</div>`+
+    `<div><strong>休み（${offLabels.length}日）：</strong>${offLabels.join('、')||'なし'}</div>`+
+    `<div><strong>oncallのみ（${oncLabels.length}日）：</strong>${oncLabels.join('、')||'なし'}</div>`;
+  switchStep(1);
+}
+
+function copyCode(){
+  const code=document.getElementById('output-code').textContent;
+  navigator.clipboard.writeText(code).then(()=>{
+    const btn=document.getElementById('copy-btn');
+    btn.textContent='✓ コピーしました！';btn.style.background='var(--success)';
+    setTimeout(()=>{btn.textContent='📋 コードをコピー';btn.style.background='';},2500);
+  }).catch(()=>{
+    // fallback
+    const ta=document.createElement('textarea');
+    ta.value=code;document.body.appendChild(ta);ta.select();
+    document.execCommand('copy');document.body.removeChild(ta);
+    const btn=document.getElementById('copy-btn');
+    btn.textContent='✓ コピーしました！';
+    setTimeout(()=>btn.textContent='📋 コードをコピー',2500);
+  });
+}
+
+function goBack(){
+  switchStep(1);
+}
+// 初期化：URLパラメータからコードを自動読み込み
+window.addEventListener('load', loadConfig);
+</script>
+</body>
+</html>
