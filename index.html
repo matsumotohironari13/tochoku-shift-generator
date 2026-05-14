@@ -1594,11 +1594,8 @@ function generateHeavy(){
     }
   });
 
-  ischemicMembers.forEach(mem=>{
-    const needed = monthlyConfig[mem.id]?.tH || 0;
-    if(assigned_count[mem.id] < needed)
-      warnings.push(`${mem.name}：休日当直${needed}回を確保できませんでした（${assigned_count[mem.id]}回）`);
-  });
+  // 警告はStep5（oncallセット処理）後にcountT()で判定するため、ここでは保留
+  // （日曜当直へのセット補完が反映されるため）
 
   // Step3: 残った土日に不整脈グループを配置（余った枠に入る）
   const arrhMembers = fixedConfig.members.filter(m=>
@@ -1704,6 +1701,14 @@ function generateHeavy(){
         schedule[sunDay].oncall = chosen.map(m=>m.id);
       }
     }
+  });
+
+  // Step5終了後：実際のcountT()で休日当直回数を検証して警告
+  fixedConfig.members.filter(m=>!isVisitingMember(m.id)).forEach(mem=>{
+    const needed = monthlyConfig[mem.id]?.tH || 0;
+    const actual = countT(mem.id).tH;
+    if(actual < needed)
+      warnings.push(`${mem.name}：休日当直${needed}回を確保できませんでした（${actual}回）`);
   });
 
   // 祝日など土日ペア外の重日
