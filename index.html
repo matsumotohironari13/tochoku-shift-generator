@@ -1399,10 +1399,12 @@ function getDayDiff(a, b){
 function hasRecentTochoku(memberId, day){
   const interval = fixedConfig.rules.interval || 3;
   const cur = new Date(day+'T00:00:00');
+  // 前方向・後方向両方チェック（休日確定後に平日を割り当てる場合に必要）
   for(let i=1; i<=interval+1; i++){
-    const d = new Date(cur); d.setDate(d.getDate()-i);
-    const ds = d.toISOString().slice(0,10);
-    if(schedule[ds]?.tochoku === memberId) return true;
+    const dp = new Date(cur); dp.setDate(dp.getDate()-i);
+    if(schedule[dp.toISOString().slice(0,10)]?.tochoku === memberId) return true;
+    const df = new Date(cur); df.setDate(df.getDate()+i);
+    if(schedule[df.toISOString().slice(0,10)]?.tochoku === memberId) return true;
   }
   // 前月当直も考慮
   for(const [pd, pid] of Object.entries(prevMonthTochoku)){
@@ -1644,8 +1646,11 @@ function generateHeavy(){
         avail.sort((a,b)=>ocScoreH(a,satDay,satDay,sunDay)-ocScoreH(b,satDay,satDay,sunDay));
         let chosen = avail.slice(0,needed);
         if(chosen.length<needed){
-          const fb=pool.filter(m=>m.id!==tDoc&&dayState(m.id,satDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m));
-          fb.sort((a,b)=>ocScoreH(a,satDay,satDay,sunDay)-ocScoreH(b,satDay,satDay,sunDay));
+          // 回数内で探す→なければ超過許容
+          const fb1=pool.filter(m=>m.id!==tDoc&&dayState(m.id,satDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocH<(monthlyConfig[m.id]?.ocH||0));
+          const fb2=pool.filter(m=>m.id!==tDoc&&dayState(m.id,satDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1.includes(m));
+          const fb=[...fb1,...fb2];
+          fb.sort((a,b)=>countOC(a.id).ocH-countOC(b.id).ocH+(Math.random()-.5)*.1);
           chosen.push(...fb.slice(0,needed-chosen.length));
           if(chosen.length<needed) warnings.push(`${satDay}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
         }
@@ -1679,12 +1684,11 @@ function generateHeavy(){
         });
         let chosen = avail.slice(0,needed);
         if(chosen.length<needed){
-          const fb=pool.filter(m=>m.id!==tDoc&&dayState(m.id,sunDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m));
-          fb.sort((a,b)=>{
-            const aBonus=(a.id===satTDoc)?-20:0,bBonus=(b.id===satTDoc)?-20:0;
-            return ocScoreH(a,sunDay,satDay,sunDay)+aBonus-(ocScoreH(b,sunDay,satDay,sunDay)+bBonus);
-          });
-          chosen.push(...fb.slice(0,needed-chosen.length));
+          const fb1s=pool.filter(m=>m.id!==tDoc&&dayState(m.id,sunDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocH<(monthlyConfig[m.id]?.ocH||0));
+          const fb2s=pool.filter(m=>m.id!==tDoc&&dayState(m.id,sunDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1s.includes(m));
+          const fbs=[...fb1s,...fb2s];
+          fbs.sort((a,b)=>{const aB=(a.id===satTDoc)?-20:0,bB=(b.id===satTDoc)?-20:0;return countOC(a.id).ocH+aB-(countOC(b.id).ocH+bB)+(Math.random()-.5)*.1;});
+          chosen.push(...fbs.slice(0,needed-chosen.length));
           if(chosen.length<needed) warnings.push(`${sunDay}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
         }
         schedule[sunDay].oncall = chosen.map(m=>m.id);
@@ -1703,9 +1707,11 @@ function generateHeavy(){
     avail.sort((a,b)=>ocScoreH(a,day,null,null)-ocScoreH(b,day,null,null));
     let chosen = avail.slice(0,needed);
     if(chosen.length<needed){
-      const fb=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m));
-      fb.sort((a,b)=>ocScoreH(a,day,null,null)-ocScoreH(b,day,null,null));
-      chosen.push(...fb.slice(0,needed-chosen.length));
+      const fb1h=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocH<(monthlyConfig[m.id]?.ocH||0));
+      const fb2h=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1h.includes(m));
+      const fbh=[...fb1h,...fb2h];
+      fbh.sort((a,b)=>countOC(a.id).ocH-countOC(b.id).ocH+(Math.random()-.5)*.1);
+      chosen.push(...fbh.slice(0,needed-chosen.length));
       if(chosen.length<needed) warnings.push(`${day}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
     }
     schedule[day].oncall = chosen.map(m=>m.id);
@@ -1818,9 +1824,11 @@ function generateWeekday(){
     });
     let chosen=avail.slice(0,needed);
     if(chosen.length<needed){
-      const fb=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m));
-      fb.sort((a,b)=>countOC(a.id).ocW-countOC(b.id).ocW+(Math.random()-.5)*.1);
-      chosen.push(...fb.slice(0,needed-chosen.length));
+      const fb1w=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocW<(monthlyConfig[m.id]?.ocW||0));
+      const fb2w=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1w.includes(m));
+      const fbw=[...fb1w,...fb2w];
+      fbw.sort((a,b)=>countOC(a.id).ocW-countOC(b.id).ocW+(Math.random()-.5)*.1);
+      chosen.push(...fbw.slice(0,needed-chosen.length));
       if(chosen.length<needed)warnings.push(`${day}：oncall${needed}人必要→${chosen.length}人のみ`);
     }
     schedule[day].oncall=chosen.map(m=>m.id);
