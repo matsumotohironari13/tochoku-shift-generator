@@ -1541,50 +1541,66 @@ function generateHeavy(){
     if(tgt.length<2) warnings.push(`${mem.name}：土日2連続確保できませんでした`);
   });
 
-  // Step2: 虚血グループの各人に「担当週」を割り振り
-  // 土曜当直＋日曜oncall または 土曜oncall＋日曜当直のセットで確定
+  // Step2: 虚血グループを月全体に均等配置（週単位・土曜当直を優先的に割り当て）
+  // 休日当直が必要な虚血メンバーを残り回数順でソート
   const ischemicMembers = fixedConfig.members.filter(m=>
     m.canTochoku && !isVisitingMember(m.id) && m.canOncall &&
     (monthlyConfig[m.id]?.tH||0) > 0
   );
-
-  // 利用可能な週ペアリスト（外勤済み除く）
-  const availPairs = pairs.filter(p=>
-    !schedule[p.sat]?.tochoku && (!p.sun || !schedule[p.sun]?.tochoku)
-  );
-
-  // 虚血グループを残り休日当直回数でソート（多い順）
   ischemicMembers.sort((a,b)=>(monthlyConfig[b.id]?.tH||0)-(monthlyConfig[a.id]?.tH||0));
 
-  // 各虚血メンバーに週を割り当て（土曜当直＋日曜oncall セット）
+  // 利用可能な土曜リスト（外勤済み除く）をシャッフルして均等配置
+  const availSats = pairs
+    .filter(p=>!schedule[p.sat]?.tochoku)
+    .map(p=>p.sat);
+
+  // 全虚血メンバーの必要回数合計スロットを作成し、月全体に均等配置
+  // スロット: [mem, mem, mem, ...] を月全体のsatリストに対応させる
+  const slots = [];
   ischemicMembers.forEach(mem=>{
-    let assigned = 0;
     const needed = monthlyConfig[mem.id]?.tH || 0;
+    for(let i=0;i<needed;i++) slots.push(mem);
+  });
 
-    for(const pair of availPairs){
-      if(assigned >= needed) break;
-      if(schedule[pair.sat]?.tochoku) continue; // 既に埋まっている
+  // スロットを月全体に均等配置するための目標インデックスを計算
+  const assigned_count = {};
+  ischemicMembers.forEach(m=>{assigned_count[m.id]=0;});
 
-      const satDay = pair.sat;
-      const sunDay = pair.sun;
+  // 各スロットに目標土曜を設定（月全体をslots.length等分）
+  const satPool = [...availSats]; // 空き土曜リスト
 
-      // 希望休・中3日チェック
+  slots.forEach((mem, slotIdx)=>{
+    if(assigned_count[mem.id] >= (monthlyConfig[mem.id]?.tH||0)) return;
+    const targetIdx = Math.floor((slotIdx + 0.5) * (satPool.length / slots.length));
+
+    // 目標インデックス付近から探索
+    const order = [];
+    for(let r=0; r<satPool.length; r++){
+      if(targetIdx-r >= 0) order.push(targetIdx-r);
+      if(r>0 && targetIdx+r < satPool.length) order.push(targetIdx+r);
+    }
+    const seen = new Set();
+    const orderedUniq = order.filter(i=>{if(seen.has(i))return false;seen.add(i);return true;});
+
+    for(const idx of orderedUniq){
+      const satDay = satPool[idx];
+      if(!satDay || schedule[satDay]?.tochoku) continue;
       if(dayState(mem.id, satDay) >= 1) continue;
       if(hasRecentTochoku(mem.id, satDay)) continue;
       if(hasAdjacentTochoku(mem.id, satDay)) continue;
-
-      // 土曜に当直を割り当て
       schedule[satDay].tochoku = mem.id;
-      assigned++;
-
-      // 日曜にもoncall担当者として後で処理するためフラグを立てる
-      // （日曜当直が空いていれば土曜oncallとのセット優先）
+      assigned_count[mem.id]++;
+      break;
     }
-    if(assigned < needed)
-      warnings.push(`${mem.name}：休日当直${needed}回を確保できませんでした（${assigned}回）`);
   });
 
-  // Step3: 残った土日に不整脈グループを配置
+  ischemicMembers.forEach(mem=>{
+    const needed = monthlyConfig[mem.id]?.tH || 0;
+    if(assigned_count[mem.id] < needed)
+      warnings.push(`${mem.name}：休日当直${needed}回を確保できませんでした（${assigned_count[mem.id]}回）`);
+  });
+
+  // Step3: 残った土日に不整脈グループを配置（余った枠に入る）
   const arrhMembers = fixedConfig.members.filter(m=>
     m.canTochoku && !isVisitingMember(m.id) && !m.canOncall &&
     (monthlyConfig[m.id]?.tH||0) > 0
@@ -1593,8 +1609,9 @@ function generateHeavy(){
   arrhMembers.forEach(mem=>{
     let assigned = 0;
     const needed = monthlyConfig[mem.id]?.tH || 0;
-
-    for(const day of heavyDays){
+    // 空いている休日を先頭から探す（ランダム要素を加えて毎回変わるように）
+    const shuffled = [...heavyDays].sort(()=>Math.random()-0.5);
+    for(const day of shuffled){
       if(assigned >= needed) break;
       if(schedule[day]?.tochoku) continue;
       if(dayState(mem.id, day) >= 1) continue;
@@ -1608,8 +1625,7 @@ function generateHeavy(){
   });
 
   // Step4: まだ空いている土日を残りの虚血グループで埋める
-  const remainHeavy = heavyDays.filter(d=>!schedule[d]?.tochoku);
-  remainHeavy.forEach(day=>{
+  heavyDays.filter(d=>!schedule[d]?.tochoku).forEach(day=>{
     const avail = fixedConfig.members.filter(m=>canAssignTochoku(m, day, true));
     if(!avail.length){ warnings.push(`${day}：休日当直の候補者なし`); return; }
     avail.sort((a,b)=>{
