@@ -1387,28 +1387,38 @@ function loadFixedConfig(){
 // PHASE 2: SHIFT GENERATION
 // =====================
 
-let schedule = {}; // {day: {tochoku: memberId|null, oncall: [memberId...]}}
+let schedule = {};
 let heavyConfirmed = false;
 let _dropdown = null;
 
-// --- Helpers ---
 function getDayDiff(a, b){
   return Math.abs(new Date(a+'T00:00:00') - new Date(b+'T00:00:00')) / 86400000;
 }
 
+// 中3日チェック（前方向のみ）
 function hasRecentTochoku(memberId, day){
   const interval = fixedConfig.rules.interval || 3;
   const cur = new Date(day+'T00:00:00');
-  // 前方向・後方向両方チェック（休日確定後に平日を割り当てる場合に必要）
   for(let i=1; i<=interval+1; i++){
-    const dp = new Date(cur); dp.setDate(dp.getDate()-i);
-    if(schedule[dp.toISOString().slice(0,10)]?.tochoku === memberId) return true;
-    const df = new Date(cur); df.setDate(df.getDate()+i);
-    if(schedule[df.toISOString().slice(0,10)]?.tochoku === memberId) return true;
+    const d = new Date(cur); d.setDate(d.getDate()-i);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if(schedule[ds]?.tochoku === memberId) return true;
   }
   // 前月当直も考慮
   for(const [pd, pid] of Object.entries(prevMonthTochoku)){
     if(pid === memberId && getDayDiff(day, pd) <= interval+1) return true;
+  }
+  return false;
+}
+
+// 連日チェック（前後1日）
+function hasAdjacentTochoku(memberId, day){
+  const cur = new Date(day+'T00:00:00');
+  for(let i=-1; i<=1; i++){
+    if(i===0) continue;
+    const d = new Date(cur); d.setDate(d.getDate()+i);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if(schedule[ds]?.tochoku === memberId) return true;
   }
   return false;
 }
@@ -1421,6 +1431,7 @@ function canAssignTochoku(member, day, heavy){
   if(!member.canTochoku) return false;
   if(dayState(member.id, day) >= 1) return false;
   if(schedule[day]?.tochoku) return false;
+  if(hasAdjacentTochoku(member.id, day)) return false;
   if(hasRecentTochoku(member.id, day)) return false;
   const needed = heavy ? (monthlyConfig[member.id]?.tH||0) : (monthlyConfig[member.id]?.tW||0);
   const used = heavy ? (countT(member.id).tH) : (countT(member.id).tW);
@@ -1436,13 +1447,12 @@ function canAssignOncall(member, day, tochokuId, heavy){
   const used = heavy ? (countOC(member.id).ocH) : (countOC(member.id).ocW);
   const needed = heavy ? (monthlyConfig[member.id]?.ocH||0) : (monthlyConfig[member.id]?.ocW||0);
   if(used >= needed) return false;
-  // oncall連続チェック
   const maxConsec = fixedConfig.rules.maxOncallConsec || 3;
   let consec = 0;
   const cur = new Date(day+'T00:00:00');
   for(let i=1; i<=maxConsec; i++){
     const d = new Date(cur); d.setDate(d.getDate()-i);
-    const ds = d.toISOString().slice(0,10);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     if(schedule[ds]?.oncall?.includes(member.id)) consec++;
     else break;
   }
@@ -1459,19 +1469,8 @@ function isVisitingMember(id){
 }
 
 function getOncallPool(tochokuId){
-  // oncall2人必要か、グループ限定oncallか判定
-  const tMember = fixedConfig.members.find(m=>m.id===tochokuId);
-  const tRole = tMember?.roleId;
-  // グループ限定oncall条件
   const groupCond = fixedConfig.specialConditions.find(c=>c.type==='groupOncall'&&c.memberId===tochokuId);
-  if(groupCond){
-    return fixedConfig.members.filter(m=>m.roleId===groupCond.groupId&&m.canOncall);
-  }
-  // 外勤当直日はグループ限定（設定があれば）
-  if(isVisitingMember(tochokuId)){
-    const visCond = fixedConfig.specialConditions.find(c=>c.type==='groupOncall'&&c.memberId===tochokuId);
-    if(visCond) return fixedConfig.members.filter(m=>m.roleId===visCond.groupId&&m.canOncall);
-  }
+  if(groupCond) return fixedConfig.members.filter(m=>m.roleId===groupCond.groupId&&m.canOncall);
   return fixedConfig.members.filter(m=>m.canOncall);
 }
 
@@ -1486,6 +1485,7 @@ function countT(memberId){
   });
   return{tW,tH};
 }
+
 function countOC(memberId){
   let ocW=0,ocH=0;
   Object.entries(schedule).forEach(([day,s])=>{
@@ -1494,55 +1494,6 @@ function countOC(memberId){
   return{ocW,ocH};
 }
 
-// 均等配置・即時書き込み（1人ずつ）
-function assignEvenlyImmediate(member, dayList, heavy){
-  const needed = heavy ? (monthlyConfig[member.id]?.tH||0) : (monthlyConfig[member.id]?.tW||0);
-  if(needed===0) return [];
-  const warnings = [];
-  const segSize = dayList.length / needed;
-
-  for(let i=0; i<needed; i++){
-    const segStart = Math.floor(i * segSize);
-    const segEnd = Math.min(Math.floor((i+1) * segSize)-1, dayList.length-1);
-    const mid = Math.floor((segStart+segEnd)/2);
-
-    // 中央から外側へ探索順を生成
-    const order = [];
-    const half = Math.max(mid-segStart, segEnd-mid);
-    for(let r=0; r<=half; r++){
-      if(mid-r >= segStart) order.push(mid-r);
-      if(r>0 && mid+r <= segEnd) order.push(mid+r);
-    }
-
-    let found = false;
-    // 通常探索（セグメント内）
-    {
-      for(const idx of order){
-        const day = dayList[idx];
-        if(!canAssignTochoku(member, day, heavy)) continue;
-        schedule[day].tochoku = member.id;
-        found = true;
-        break;
-      }
-    }
-    // セグメント外から探す
-    if(!found){
-      for(const day of dayList){
-        if(!canAssignTochoku(member, day, heavy)) continue;
-        schedule[day].tochoku = member.id;
-        found = true;
-        warnings.push(`${day}：${member.name} セグメント外から割り当て`);
-        break;
-      }
-    }
-    if(!found){
-      warnings.push(`${member.name}：${heavy?'休日':'平日'}当直スロット${i+1}を割り当てできませんでした（中3日ルール）`);
-    }
-  }
-  return warnings;
-}
-
-// --- プレチェック ---
 function renderPreCheck(){
   const el = document.getElementById('gen-precheck');
   if(!el) return;
@@ -1562,101 +1513,146 @@ function renderPreCheck(){
   </div>`;
 }
 
-// --- 土日生成 ---
+// =====================
+// 土日生成（週単位割り当て方式）
+// =====================
 function generateHeavy(){
   const days = getDays();
   if(!days.length){alert('対象月を選択してください');return;}
   const heavyDays = days.filter(isHeavy);
+  const pairs = getWeekendPairs();
   heavyConfirmed = false;
 
-  // scheduleを休日分だけ初期化
-  days.forEach(d=>{ if(!schedule[d]) schedule[d]={tochoku:null,oncall:[]}; });
-  heavyDays.forEach(d=>{ schedule[d]={tochoku:null,oncall:[]}; });
+  days.forEach(d=>{ schedule[d]={tochoku:null,oncall:[]}; });
   document.getElementById('gen-weekday-section').style.display='none';
 
   const warnings = [];
 
-  // Step1: 外勤メンバーを先に配置
-  fixedConfig.specialConditions.filter(c=>c.type==='visiting').forEach(c=>{
+  // Step1: 外勤（八田）の週を確保
+  const visitingConditions = fixedConfig.specialConditions.filter(c=>c.type==='visiting');
+  visitingConditions.forEach(c=>{
     const mem = fixedConfig.members.find(m=>m.id===c.memberId);
     if(!mem) return;
-    const pairs = getWeekendPairs();
     const sat = visitingWeekSelected[mem.id];
     let tgt = [];
     if(sat){ const p=pairs.find(p=>p.sat===sat); if(p){if(p.sat)tgt.push(p.sat);if(p.sun)tgt.push(p.sun);} }
     if(!tgt.length) tgt = heavyDays.slice(-2);
-    tgt.forEach(day=>{
-      if(schedule[day]) schedule[day].tochoku = mem.id;
-    });
-    if(tgt.length < 2) warnings.push(`${mem.name}：土日2連続確保できませんでした`);
+    tgt.forEach(day=>{ schedule[day].tochoku = mem.id; });
+    if(tgt.length<2) warnings.push(`${mem.name}：土日2連続確保できませんでした`);
   });
 
-  // Step2: 各医師の休日当直を均等配置（不整脈→虚血の順）
-  // 役割グループ順でソート（特殊条件でグループ限定oncallが設定されているグループを先に）
-  const arrhGroupIds = new Set(
-    fixedConfig.specialConditions.filter(c=>c.type==='groupOncall').map(c=>c.memberId)
+  // Step2: 虚血グループの各人に「担当週」を割り振り
+  // 土曜当直＋日曜oncall または 土曜oncall＋日曜当直のセットで確定
+  const ischemicMembers = fixedConfig.members.filter(m=>
+    m.canTochoku && !isVisitingMember(m.id) && m.canOncall &&
+    (monthlyConfig[m.id]?.tH||0) > 0
   );
-  const arrhMembers = fixedConfig.members.filter(m=>arrhGroupIds.has(m.id)||
-    fixedConfig.specialConditions.some(c=>c.memberId===m.id&&c.type==='groupOncall'));
-  // 不整脈系（oncall不可グループ）を先に
-  const oncallNg = fixedConfig.members.filter(m=>!m.canOncall&&m.canTochoku&&!isVisitingMember(m.id));
-  const oncallOk = fixedConfig.members.filter(m=>m.canOncall&&m.canTochoku&&!isVisitingMember(m.id));
-  const tochokuOrder = [...oncallNg, ...oncallOk];
 
-  tochokuOrder.forEach(mem=>{
-    const w = assignEvenlyImmediate(mem, heavyDays, true);
-    warnings.push(...w);
+  // 利用可能な週ペアリスト（外勤済み除く）
+  const availPairs = pairs.filter(p=>
+    !schedule[p.sat]?.tochoku && (!p.sun || !schedule[p.sun]?.tochoku)
+  );
+
+  // 虚血グループを残り休日当直回数でソート（多い順）
+  ischemicMembers.sort((a,b)=>(monthlyConfig[b.id]?.tH||0)-(monthlyConfig[a.id]?.tH||0));
+
+  // 各虚血メンバーに週を割り当て（土曜当直＋日曜oncall セット）
+  ischemicMembers.forEach(mem=>{
+    let assigned = 0;
+    const needed = monthlyConfig[mem.id]?.tH || 0;
+
+    for(const pair of availPairs){
+      if(assigned >= needed) break;
+      if(schedule[pair.sat]?.tochoku) continue; // 既に埋まっている
+
+      const satDay = pair.sat;
+      const sunDay = pair.sun;
+
+      // 希望休・中3日チェック
+      if(dayState(mem.id, satDay) >= 1) continue;
+      if(hasRecentTochoku(mem.id, satDay)) continue;
+      if(hasAdjacentTochoku(mem.id, satDay)) continue;
+
+      // 土曜に当直を割り当て
+      schedule[satDay].tochoku = mem.id;
+      assigned++;
+
+      // 日曜にもoncall担当者として後で処理するためフラグを立てる
+      // （日曜当直が空いていれば土曜oncallとのセット優先）
+    }
+    if(assigned < needed)
+      warnings.push(`${mem.name}：休日当直${needed}回を確保できませんでした（${assigned}回）`);
   });
 
-  // Step3: oncallを配置
-  // 土日をペアで処理し、同じ週に土日両方集約して負担週を最小化する
-  const weekendPairs = getWeekendPairs();
-  const processedDays = new Set();
+  // Step3: 残った土日に不整脈グループを配置
+  const arrhMembers = fixedConfig.members.filter(m=>
+    m.canTochoku && !isVisitingMember(m.id) && !m.canOncall &&
+    (monthlyConfig[m.id]?.tH||0) > 0
+  );
 
-  // その人がすでにその週の土日に当直またはoncallで入っているか確認
-  function alreadyInWeek(memberId, satDay, sunDay){
-    if(satDay && schedule[satDay]?.tochoku === memberId) return true;
-    if(sunDay && schedule[sunDay]?.tochoku === memberId) return true;
-    if(satDay && schedule[satDay]?.oncall?.includes(memberId)) return true;
-    if(sunDay && schedule[sunDay]?.oncall?.includes(memberId)) return true;
-    return false;
-  }
+  arrhMembers.forEach(mem=>{
+    let assigned = 0;
+    const needed = monthlyConfig[mem.id]?.tH || 0;
 
-  // oncallスコア計算（同じ週に既に入っている人を強く優先）
-  function ocScoreH(member, day, satDay, sunDay){
-    const ra = monthlyConfig[member.id]?.ocH||0;
-    const ua = countOC(member.id).ocH;
-    const remainRatio = ra>0 ? (ra-ua)/ra : 0;
-    // 同じ週に既に当直oroncallで入っている→強く優先（-20点ボーナス）
-    const weekBonus = alreadyInWeek(member.id, satDay, sunDay) ? -20 : 0;
-    return (ua-ra) + weekBonus + (Math.random()-.5)*.1;
-  }
+    for(const day of heavyDays){
+      if(assigned >= needed) break;
+      if(schedule[day]?.tochoku) continue;
+      if(dayState(mem.id, day) >= 1) continue;
+      if(hasRecentTochoku(mem.id, day)) continue;
+      if(hasAdjacentTochoku(mem.id, day)) continue;
+      schedule[day].tochoku = mem.id;
+      assigned++;
+    }
+    if(assigned < needed)
+      warnings.push(`${mem.name}：休日当直${needed}回を確保できませんでした（${assigned}回）`);
+  });
 
-  weekendPairs.forEach(pair=>{
+  // Step4: まだ空いている土日を残りの虚血グループで埋める
+  const remainHeavy = heavyDays.filter(d=>!schedule[d]?.tochoku);
+  remainHeavy.forEach(day=>{
+    const avail = fixedConfig.members.filter(m=>canAssignTochoku(m, day, true));
+    if(!avail.length){ warnings.push(`${day}：休日当直の候補者なし`); return; }
+    avail.sort((a,b)=>{
+      const ra=monthlyConfig[a.id]?.tH||0, rb=monthlyConfig[b.id]?.tH||0;
+      const ua=countT(a.id).tH, ub=countT(b.id).tH;
+      return (ua-ra)-(ub-rb)+(Math.random()-.5)*.1;
+    });
+    schedule[day].tochoku = avail[0].id;
+  });
+
+  // Step5: 土日oncallを配置（セット優先）
+  const arrhOncallCount={};
+  fixedConfig.members.filter(m=>m.canOncall).forEach(m=>{arrhOncallCount[m.id]=0});
+
+  pairs.forEach(pair=>{
     const satDay = pair.sat;
     const sunDay = pair.sun;
 
-    // --- 土曜のoncall ---
-    if(satDay && !processedDays.has(satDay)){
+    // 土曜oncall
+    if(satDay){
       const tDoc = schedule[satDay]?.tochoku;
       if(tDoc){
         const pool = getOncallPool(tDoc);
         const needed = getOncallNeeded(tDoc);
-        const avail = pool.filter(m=>canAssignOncall(m,satDay,tDoc,true));
-        avail.sort((a,b)=>ocScoreH(a,satDay,satDay,sunDay)-ocScoreH(b,satDay,satDay,sunDay));
-        let chosen = avail.slice(0,needed);
-        if(chosen.length<needed){
-          // 回数内で探す→なければ超過許容
+        const avail = pool.filter(m=>canAssignOncall(m, satDay, tDoc, true));
+        avail.sort((a,b)=>{
+          // 同じ週の日曜に当直が入っている人を優先（週集約）
+          const aInWeek = sunDay && schedule[sunDay]?.tochoku===a.id ? -10 : 0;
+          const bInWeek = sunDay && schedule[sunDay]?.tochoku===b.id ? -10 : 0;
+          const ra=monthlyConfig[a.id]?.ocH||0, rb=monthlyConfig[b.id]?.ocH||0;
+          const ua=countOC(a.id).ocH, ub=countOC(b.id).ocH;
+          return (ua-ra+aInWeek)-(ub-rb+bInWeek)+(Math.random()-.5)*.1;
+        });
+        let chosen = avail.slice(0, needed);
+        if(chosen.length < needed){
           const fb1=pool.filter(m=>m.id!==tDoc&&dayState(m.id,satDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocH<(monthlyConfig[m.id]?.ocH||0));
           const fb2=pool.filter(m=>m.id!==tDoc&&dayState(m.id,satDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1.includes(m));
-          const fb=[...fb1,...fb2];
-          fb.sort((a,b)=>countOC(a.id).ocH-countOC(b.id).ocH+(Math.random()-.5)*.1);
-          chosen.push(...fb.slice(0,needed-chosen.length));
+          [...fb1,...fb2].forEach(m=>{ if(chosen.length<needed) chosen.push(m); });
           if(chosen.length<needed) warnings.push(`${satDay}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
         }
         schedule[satDay].oncall = chosen.map(m=>m.id);
 
-        // 土曜oncall→日曜当直のセット：日曜当直がまだ未割り当てなら土曜oncall1人目を割り当て
+        // 土曜oncall→日曜当直セット：日曜当直が空いていれば土曜oncall1人目を割り当て
         if(sunDay && !schedule[sunDay]?.tochoku && chosen.length>0){
           const candidate = fixedConfig.members.find(m=>m.id===chosen[0].id);
           if(candidate && canAssignTochoku(candidate, sunDay, true)){
@@ -1664,62 +1660,52 @@ function generateHeavy(){
           }
         }
       }
-      processedDays.add(satDay);
     }
 
-    // --- 日曜のoncall ---
-    if(sunDay && !processedDays.has(sunDay)){
+    // 日曜oncall
+    if(sunDay){
       const tDoc = schedule[sunDay]?.tochoku;
+      const satTDoc = schedule[satDay]?.tochoku;
       if(tDoc){
         const pool = getOncallPool(tDoc);
         const needed = getOncallNeeded(tDoc);
-        const satTDoc = schedule[satDay]?.tochoku;
-
-        const avail = pool.filter(m=>canAssignOncall(m,sunDay,tDoc,true));
-        // 土曜当直者を日曜oncallに優先（同じ週集約）
+        const avail = pool.filter(m=>canAssignOncall(m, sunDay, tDoc, true));
         avail.sort((a,b)=>{
-          const aBonus = (a.id===satTDoc)?-20:0;
-          const bBonus = (b.id===satTDoc)?-20:0;
-          return ocScoreH(a,sunDay,satDay,sunDay)+aBonus-(ocScoreH(b,sunDay,satDay,sunDay)+bBonus);
+          // 土曜当直者を日曜oncallに優先（セット）
+          const aBonus = a.id===satTDoc ? -15 : 0;
+          const bBonus = b.id===satTDoc ? -15 : 0;
+          const ra=monthlyConfig[a.id]?.ocH||0, rb=monthlyConfig[b.id]?.ocH||0;
+          const ua=countOC(a.id).ocH, ub=countOC(b.id).ocH;
+          return (ua-ra+aBonus)-(ub-rb+bBonus)+(Math.random()-.5)*.1;
         });
-        let chosen = avail.slice(0,needed);
-        if(chosen.length<needed){
-          const fb1s=pool.filter(m=>m.id!==tDoc&&dayState(m.id,sunDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocH<(monthlyConfig[m.id]?.ocH||0));
-          const fb2s=pool.filter(m=>m.id!==tDoc&&dayState(m.id,sunDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1s.includes(m));
-          const fbs=[...fb1s,...fb2s];
-          fbs.sort((a,b)=>{const aB=(a.id===satTDoc)?-20:0,bB=(b.id===satTDoc)?-20:0;return countOC(a.id).ocH+aB-(countOC(b.id).ocH+bB)+(Math.random()-.5)*.1;});
-          chosen.push(...fbs.slice(0,needed-chosen.length));
+        let chosen = avail.slice(0, needed);
+        if(chosen.length < needed){
+          const fb1=pool.filter(m=>m.id!==tDoc&&dayState(m.id,sunDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocH<(monthlyConfig[m.id]?.ocH||0));
+          const fb2=pool.filter(m=>m.id!==tDoc&&dayState(m.id,sunDay)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1.includes(m));
+          [...fb1,...fb2].forEach(m=>{ if(chosen.length<needed) chosen.push(m); });
           if(chosen.length<needed) warnings.push(`${sunDay}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
         }
         schedule[sunDay].oncall = chosen.map(m=>m.id);
       }
-      processedDays.add(sunDay);
     }
   });
 
-  // 土日ペア以外の祝日など
-  heavyDays.filter(d=>!processedDays.has(d)).forEach(day=>{
+  // 祝日など土日ペア外の重日
+  heavyDays.filter(d=>!pairs.some(p=>p.sat===d||p.sun===d)).forEach(day=>{
     const tDoc = schedule[day]?.tochoku;
-    if(!tDoc){processedDays.add(day);return;}
+    if(!tDoc) return;
     const pool = getOncallPool(tDoc);
     const needed = getOncallNeeded(tDoc);
-    const avail = pool.filter(m=>canAssignOncall(m,day,tDoc,true));
-    avail.sort((a,b)=>ocScoreH(a,day,null,null)-ocScoreH(b,day,null,null));
-    let chosen = avail.slice(0,needed);
+    const avail = pool.filter(m=>canAssignOncall(m, day, tDoc, true));
+    avail.sort((a,b)=>countOC(a.id).ocH-countOC(b.id).ocH+(Math.random()-.5)*.1);
+    let chosen = avail.slice(0, needed);
     if(chosen.length<needed){
-      const fb1h=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocH<(monthlyConfig[m.id]?.ocH||0));
-      const fb2h=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1h.includes(m));
-      const fbh=[...fb1h,...fb2h];
-      fbh.sort((a,b)=>countOC(a.id).ocH-countOC(b.id).ocH+(Math.random()-.5)*.1);
-      chosen.push(...fbh.slice(0,needed-chosen.length));
-      if(chosen.length<needed) warnings.push(`${day}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
+      const fb=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m));
+      fb.sort((a,b)=>countOC(a.id).ocH-countOC(b.id).ocH+(Math.random()-.5)*.1);
+      chosen.push(...fb.slice(0,needed-chosen.length));
     }
     schedule[day].oncall = chosen.map(m=>m.id);
-    processedDays.add(day);
   });
-
-  // 未割り当て警告
-  heavyDays.filter(d=>!schedule[d]?.tochoku).forEach(d=>warnings.push(`${d}：休日当直が割り当てられませんでした`));
 
   showWarnings(warnings, 'gen-warnings');
   renderHeavyCalendar(heavyDays);
@@ -1728,11 +1714,14 @@ function generateHeavy(){
 }
 
 function getPrevDayStr(s){
-  const d=new Date(s+'T00:00:00');d.setDate(d.getDate()-1);return d.toISOString().slice(0,10);
+  const d=new Date(s+'T00:00:00');d.setDate(d.getDate()-1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function isSunday(s){return new Date(s+'T00:00:00').getDay()===0;}
 
-// --- 土日カレンダー描画 ---
+// =====================
+// カレンダー描画
+// =====================
 function renderHeavyCalendar(heavyDays){
   const el = document.getElementById('gen-heavy-calendar');
   const[y,mo]=document.getElementById('target-month').value.split('-').map(Number);
@@ -1741,107 +1730,18 @@ function renderHeavyCalendar(heavyDays){
   const offset = firstDow===0?6:firstDow-1;
   const cells = Array(offset).fill(null).concat(allDays);
   const DOW=['月','火','水','木','金','土','日'];
-
   let html=`<div class="cal-wrap"><div class="cal-grid">`;
   DOW.forEach(d=>html+=`<div class="cal-hd">${d}</div>`);
   cells.forEach(day=>{
     if(!day){html+='<div class="cal-cell empty"></div>';return;}
     const isH=isHeavy(day);
-    if(!isH){html+=`<div class="cal-cell" style="opacity:.35"><div class="cal-date" style="color:var(--text-3)">${new Date(day+'T00:00:00').getDate()}</div></div>`;return;}
-    const s=schedule[day]||{tochoku:null,oncall:[]};
-    const tMem=s.tochoku?fixedConfig.members.find(m=>m.id===s.tochoku):null;
-    const tColor=tMem?getMemberColor(tMem):'#ccc';
-    const isArr=tMem&&!tMem.canOncall&&!isVisitingMember(tMem.id);
-    const isVis=tMem&&isVisitingMember(tMem.id);
-    let cls='cal-cell heavy';
-    if(isArr)cls='cal-cell arrh';
-    if(isVis)cls='cal-cell visiting';
-    if(isClinicHol(day))cls='cal-cell clinic-hol';
-    const needed=s.tochoku?getOncallNeeded(s.tochoku):1;
-    const shortage=!s.tochoku||s.oncall.length<needed;
-    if(shortage)cls+=' shortage';
-    const dateNum=new Date(day+'T00:00:00').getDate();
-    const dow=new Date(day+'T00:00:00').getDay();
-    const dateColor=dow===6?'var(--accent)':dow===0||isHol(day)?'var(--danger)':'';
-    const typeLabel=isClinicHol(day)?'診祝':isHeavy(day)?'土日':'';
-    const oncallHtml=s.oncall.map((oid,i)=>{
-      const om=fixedConfig.members.find(m=>m.id===oid);
-      return`<span data-doctor="${oid}" onmouseenter="highlightDoctor('${oid}')" onmouseleave="highlightDoctor(null)" onclick="showDropdown(event,'${day}','oncall',${i})">📞${om?.name||oid}</span>`;
-    }).join(' ');
-    const addOncall=s.oncall.length<(needed+1)?`<span class="cal-add" onclick="showAddOncall(event,'${day}')">＋</span>`:'';
-    html+=`<div class="${cls}" id="cell-${day}">
-      <div class="cal-date" style="${dateColor?'color:'+dateColor:''}">
-        <span>${dateNum}</span>
-        ${typeLabel?`<span class="cal-type ${isClinicHol(day)?'ch':'we'}">${typeLabel}</span>`:''}
-      </div>
-      <div class="cal-tochoku" data-doctor="${s.tochoku||''}"
-        onmouseenter="highlightDoctor('${s.tochoku||''}')" onmouseleave="highlightDoctor(null)"
-        onclick="showDropdown(event,'${day}','tochoku',0)"
-        style="color:${tColor};font-weight:600;margin-bottom:2px">
-        ${tMem?.name||'—'}
-      </div>
-      <div class="cal-oncall">${oncallHtml} ${addOncall}</div>
-    </div>`;
+    if(!isH){html+=`<div class="cal-cell" style="opacity:.3"><div class="cal-date" style="color:var(--text-3)">${new Date(day+'T00:00:00').getDate()}</div></div>`;return;}
+    html += renderCell(day);
   });
   html+='</div></div>';
   el.innerHTML=html;
 }
 
-// --- 土日確定→平日生成 ---
-function confirmHeavy(){
-  heavyConfirmed=true;
-  document.getElementById('gen-weekday-section').style.display='block';
-  generateWeekday();
-}
-
-// --- 平日生成 ---
-function generateWeekday(){
-  const days=getDays();
-  const weekdays=days.filter(d=>!isHeavy(d));
-  const warnings=[];
-
-  // 平日scheduleをリセット
-  weekdays.forEach(d=>{schedule[d]={tochoku:null,oncall:[]};});
-
-  // oncall不可グループ→oncall可グループの順で平日当直を均等配置
-  const oncallNg=fixedConfig.members.filter(m=>!m.canOncall&&m.canTochoku&&!isVisitingMember(m.id));
-  const oncallOk=fixedConfig.members.filter(m=>m.canOncall&&m.canTochoku&&!isVisitingMember(m.id));
-  [...oncallNg,...oncallOk].forEach(mem=>{
-    const w=assignEvenlyImmediate(mem,weekdays,false);
-    warnings.push(...w);
-  });
-
-  // 平日oncall
-  weekdays.forEach(day=>{
-    const tDoc=schedule[day]?.tochoku;if(!tDoc)return;
-    const needed=getOncallNeeded(tDoc);
-    const pool=getOncallPool(tDoc);
-    const avail=pool.filter(m=>canAssignOncall(m,day,tDoc,false));
-    avail.sort((a,b)=>{
-      const ra=monthlyConfig[a.id]?.ocW||0,rb=monthlyConfig[b.id]?.ocW||0;
-      const ua=countOC(a.id).ocW,ub=countOC(b.id).ocW;
-      return (ua-ra)-(ub-rb)+(Math.random()-.5)*.1;
-    });
-    let chosen=avail.slice(0,needed);
-    if(chosen.length<needed){
-      const fb1w=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocW<(monthlyConfig[m.id]?.ocW||0));
-      const fb2w=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1w.includes(m));
-      const fbw=[...fb1w,...fb2w];
-      fbw.sort((a,b)=>countOC(a.id).ocW-countOC(b.id).ocW+(Math.random()-.5)*.1);
-      chosen.push(...fbw.slice(0,needed-chosen.length));
-      if(chosen.length<needed)warnings.push(`${day}：oncall${needed}人必要→${chosen.length}人のみ`);
-    }
-    schedule[day].oncall=chosen.map(m=>m.id);
-  });
-
-  weekdays.filter(d=>!schedule[d]?.tochoku).forEach(d=>warnings.push(`${d}：平日当直が割り当てられませんでした`));
-
-  showWarnings(warnings,'gen-weekday-warnings');
-  renderFullCalendar();
-  renderSummary();
-}
-
-// --- フルカレンダー（土日＋平日） ---
 function renderFullCalendar(){
   const el=document.getElementById('gen-weekday-calendar');
   const[y,mo]=document.getElementById('target-month').value.split('-').map(Number);
@@ -1850,51 +1750,146 @@ function renderFullCalendar(){
   const offset=firstDow===0?6:firstDow-1;
   const cells=Array(offset).fill(null).concat(allDays);
   const DOW=['月','火','水','木','金','土','日'];
-
   let html=`<div class="cal-wrap"><div class="cal-grid">`;
   DOW.forEach(d=>html+=`<div class="cal-hd">${d}</div>`);
   cells.forEach(day=>{
     if(!day){html+='<div class="cal-cell empty"></div>';return;}
-    const s=schedule[day]||{tochoku:null,oncall:[]};
-    const tMem=s.tochoku?fixedConfig.members.find(m=>m.id===s.tochoku):null;
-    const tColor=tMem?getMemberColor(tMem):'#ccc';
-    const isH=isHeavy(day);
-    const isArr=tMem&&!tMem.canOncall&&!isVisitingMember(tMem.id);
-    const isVis=tMem&&isVisitingMember(tMem.id);
-    let cls='cal-cell'+(isH?' heavy':'');
-    if(isArr)cls='cal-cell arrh';
-    if(isVis)cls='cal-cell visiting';
-    if(isClinicHol(day))cls='cal-cell clinic-hol';
-    const needed=s.tochoku?getOncallNeeded(s.tochoku):1;
-    if(!s.tochoku||s.oncall.length<needed)cls+=' shortage';
-    const dateNum=new Date(day+'T00:00:00').getDate();
-    const dow=new Date(day+'T00:00:00').getDay();
-    const dateColor=dow===6?'var(--accent)':dow===0||isHol(day)?'var(--danger)':'';
-    const typeLabel=isClinicHol(day)?'診祝':isH?'土日':'平';
-    const oncallHtml=s.oncall.map((oid,i)=>{
-      const om=fixedConfig.members.find(m=>m.id===oid);
-      return`<span data-doctor="${oid}" onmouseenter="highlightDoctor('${oid}')" onmouseleave="highlightDoctor(null)" onclick="showDropdown(event,'${day}','oncall',${i})">📞${om?.name||oid}</span>`;
-    }).join(' ');
-    const addOncall=s.oncall.length<needed+1?`<span class="cal-add" onclick="showAddOncall(event,'${day}')">＋</span>`:'';
-    html+=`<div class="${cls}" id="cell-${day}">
-      <div class="cal-date" style="${dateColor?'color:'+dateColor:''}">
-        <span>${dateNum}</span>
-        <span class="cal-type ${isClinicHol(day)?'ch':isH?'we':''}">${typeLabel}</span>
-      </div>
-      <div class="cal-tochoku" data-doctor="${s.tochoku||''}"
-        onmouseenter="highlightDoctor('${s.tochoku||''}')" onmouseleave="highlightDoctor(null)"
-        onclick="showDropdown(event,'${day}','tochoku',0)"
-        style="color:${tColor};font-weight:600;margin-bottom:2px">
-        ${tMem?.name||'—'}
-      </div>
-      <div class="cal-oncall">${oncallHtml} ${addOncall}</div>
-    </div>`;
+    html += renderCell(day);
   });
   html+='</div></div>';
   el.innerHTML=html;
 }
 
-// --- 集計表 ---
+function renderCell(day){
+  const s=schedule[day]||{tochoku:null,oncall:[]};
+  const tMem=s.tochoku?fixedConfig.members.find(m=>m.id===s.tochoku):null;
+  const tColor=tMem?getMemberColor(tMem):'#ccc';
+  const isH=isHeavy(day);
+  const isArr=tMem&&!tMem.canOncall&&!isVisitingMember(tMem.id);
+  const isVis=tMem&&isVisitingMember(tMem.id);
+  let cls='cal-cell'+(isH?' heavy':'');
+  if(isArr)cls='cal-cell arrh';
+  if(isVis)cls='cal-cell visiting';
+  if(isClinicHol(day))cls='cal-cell clinic-hol';
+  const needed=s.tochoku?getOncallNeeded(s.tochoku):1;
+  if(!s.tochoku||s.oncall.length<needed)cls+=' shortage';
+  const dateNum=new Date(day+'T00:00:00').getDate();
+  const dow=new Date(day+'T00:00:00').getDay();
+  const dateColor=dow===6?'var(--accent)':dow===0||isHol(day)?'var(--danger)':'';
+  const typeLabel=isClinicHol(day)?'診祝':isH?'土日':'平';
+  const oncallHtml=s.oncall.map((oid,i)=>{
+    const om=fixedConfig.members.find(m=>m.id===oid);
+    return`<span data-doctor="${oid}" onmouseenter="highlightDoctor('${oid}')" onmouseleave="highlightDoctor(null)" onclick="showDropdown(event,'${day}','oncall',${i})">📞${om?.name||oid}</span>`;
+  }).join(' ');
+  const addOncall=s.oncall.length<needed+1?`<span class="cal-add" onclick="showAddOncall(event,'${day}')">＋</span>`:'';
+  return `<div class="${cls}" id="cell-${day}">
+    <div class="cal-date" style="${dateColor?'color:'+dateColor:''}">
+      <span>${dateNum}</span>
+      <span class="cal-type ${isClinicHol(day)?'ch':isH?'we':''}">${typeLabel}</span>
+    </div>
+    <div class="cal-tochoku" data-doctor="${s.tochoku||''}"
+      onmouseenter="highlightDoctor('${s.tochoku||''}')" onmouseleave="highlightDoctor(null)"
+      onclick="showDropdown(event,'${day}','tochoku',0)"
+      style="color:${tColor};font-weight:600;margin-bottom:2px">
+      ${tMem?.name||'—'}
+    </div>
+    <div class="cal-oncall">${oncallHtml} ${addOncall}</div>
+  </div>`;
+}
+
+// =====================
+// 土日確定→平日生成
+// =====================
+function confirmHeavy(){
+  heavyConfirmed=true;
+  document.getElementById('gen-weekday-section').style.display='block';
+  generateWeekday();
+}
+
+function generateWeekday(){
+  const days=getDays();
+  const weekdays=days.filter(d=>!isHeavy(d));
+  const warnings=[];
+
+  weekdays.forEach(d=>{schedule[d]={tochoku:null,oncall:[]};});
+
+  // 全メンバーの平日当直を均等配置（即時書き込み）
+  const allTochokuMembers = fixedConfig.members.filter(m=>m.canTochoku&&!isVisitingMember(m.id));
+  // oncall不可→oncall可の順
+  const ordered = [
+    ...allTochokuMembers.filter(m=>!m.canOncall),
+    ...allTochokuMembers.filter(m=>m.canOncall),
+  ];
+
+  ordered.forEach(mem=>{
+    const needed = monthlyConfig[mem.id]?.tW || 0;
+    if(needed===0) return;
+    let assigned = 0;
+    const segSize = weekdays.length / needed;
+
+    for(let i=0; i<needed; i++){
+      const segStart = Math.floor(i*segSize);
+      const segEnd = Math.min(Math.floor((i+1)*segSize)-1, weekdays.length-1);
+      const mid = Math.floor((segStart+segEnd)/2);
+
+      const order=[];
+      const half=Math.max(mid-segStart,segEnd-mid);
+      for(let r=0;r<=half;r++){
+        if(mid-r>=segStart)order.push(mid-r);
+        if(r>0&&mid+r<=segEnd)order.push(mid+r);
+      }
+
+      let found=false;
+      for(const idx of order){
+        const day=weekdays[idx];
+        if(!canAssignTochoku(mem,day,false))continue;
+        schedule[day].tochoku=mem.id;
+        assigned++;found=true;break;
+      }
+      if(!found){
+        for(const day of weekdays){
+          if(!canAssignTochoku(mem,day,false))continue;
+          schedule[day].tochoku=mem.id;
+          assigned++;found=true;
+          warnings.push(`${day}：${mem.name} セグメント外から割り当て`);
+          break;
+        }
+      }
+      if(!found) warnings.push(`${mem.name}：平日当直スロット${i+1}を割り当てできませんでした（中3日ルール）`);
+    }
+  });
+
+  weekdays.filter(d=>!schedule[d]?.tochoku).forEach(d=>warnings.push(`${d}：平日当直の割り当てなし`));
+
+  // 平日oncall
+  weekdays.forEach(day=>{
+    const tDoc=schedule[day]?.tochoku;if(!tDoc)return;
+    const pool=getOncallPool(tDoc);
+    const needed=getOncallNeeded(tDoc);
+    const avail=pool.filter(m=>canAssignOncall(m,day,tDoc,false));
+    avail.sort((a,b)=>{
+      const ra=monthlyConfig[a.id]?.ocW||0,rb=monthlyConfig[b.id]?.ocW||0;
+      const ua=countOC(a.id).ocW,ub=countOC(b.id).ocW;
+      return (ua-ra)-(ub-rb)+(Math.random()-.5)*.1;
+    });
+    let chosen=avail.slice(0,needed);
+    if(chosen.length<needed){
+      const fb1=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocW<(monthlyConfig[m.id]?.ocW||0));
+      const fb2=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1.includes(m));
+      [...fb1,...fb2].forEach(m=>{if(chosen.length<needed)chosen.push(m);});
+      if(chosen.length<needed)warnings.push(`${day}：oncall${needed}人必要→${chosen.length}人のみ`);
+    }
+    schedule[day].oncall=chosen.map(m=>m.id);
+  });
+
+  showWarnings(warnings,'gen-weekday-warnings');
+  renderFullCalendar();
+  renderSummary();
+}
+
+// =====================
+// 集計表
+// =====================
 function renderSummary(){
   const el=document.getElementById('gen-summary');
   let html=`<div class="card"><div class="card-title"><span class="icon">📊</span>個人別集計</div>
@@ -1921,18 +1916,16 @@ function renderSummary(){
     </tr>`;
   });
   html+=`</tbody></table></div>
-  <p style="font-size:11px;color:var(--text-3);margin-top:8px">緑=設定通り　黄=不足　赤=超過</p></div>`;
+  <p style="font-size:11px;color:var(--text-3);margin-top:8px">黒=設定通り　青=不足　赤=超過</p></div>`;
   el.innerHTML=html;
 }
 
-// --- 警告表示 ---
 function showWarnings(warnings, elId){
   const el=document.getElementById(elId);if(!el)return;
   if(!warnings.length){el.innerHTML='<div class="success-box">✓ 設定通りに割り当て完了</div>';return;}
   el.innerHTML=`<div class="warn-box">${warnings.map(w=>`⚠ ${w}`).join('<br>')}</div>`;
 }
 
-// --- ホバーハイライト ---
 function highlightDoctor(id){
   document.querySelectorAll('.cal-cell').forEach(c=>c.classList.remove('highlighted'));
   if(!id)return;
@@ -1941,7 +1934,6 @@ function highlightDoctor(id){
   });
 }
 
-// --- ドロップダウン ---
 function closeDropdown(){if(_dropdown){_dropdown.remove();_dropdown=null;}}
 document.addEventListener('click',e=>{if(_dropdown&&!_dropdown.contains(e.target))closeDropdown();});
 
@@ -1949,15 +1941,10 @@ function showDropdown(e,day,type,idx){
   e.stopPropagation();closeDropdown();
   const s=schedule[day];
   const tDoc=s?.tochoku;
-  const isH=isHeavy(day);
 
   let candidates=[];
   if(type==='tochoku'){
-    candidates=fixedConfig.members.filter(m=>{
-      if(!m.canTochoku||isVisitingMember(m.id))return false;
-      if(dayState(m.id,day)>=1)return false;
-      return true;
-    });
+    candidates=fixedConfig.members.filter(m=>m.canTochoku&&!isVisitingMember(m.id)&&dayState(m.id,day)<1);
   } else {
     const pool=getOncallPool(tDoc);
     candidates=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1);
@@ -1975,10 +1962,9 @@ function showDropdown(e,day,type,idx){
   }
 
   candidates.forEach(mem=>{
-    const item=document.createElement('div');
-    item.className='dd-item';
+    const item=document.createElement('div');item.className='dd-item';
     const color=getMemberColor(mem);
-    item.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>${mem.name}`;
+    item.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;margin-right:6px"></span>${mem.name}`;
     item.onclick=()=>{
       if(type==='tochoku') s.tochoku=mem.id;
       else s.oncall[idx]=mem.id;
@@ -1990,7 +1976,7 @@ function showDropdown(e,day,type,idx){
   document.body.appendChild(dd);_dropdown=dd;
   const rect=e.target.getBoundingClientRect();
   const maxH=Math.min(260,window.innerHeight-80);
-  dd.style.maxHeight=maxH+'px';
+  dd.style.maxHeight=maxH+'px';dd.style.overflowY='auto';
   const left=Math.max(4,Math.min(rect.left+window.scrollX,window.innerWidth-160));
   dd.style.left=left+'px';
   if(rect.bottom>window.innerHeight*0.65){
@@ -2011,13 +1997,13 @@ function showAddOncall(e,day){
   candidates.forEach(mem=>{
     const item=document.createElement('div');item.className='dd-item';
     const color=getMemberColor(mem);
-    item.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span>${mem.name}`;
+    item.innerHTML=`<span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;margin-right:6px"></span>${mem.name}`;
     item.onclick=()=>{s.oncall.push(mem.id);closeDropdown();refreshCalendar(day);};
     dd.appendChild(item);
   });
   document.body.appendChild(dd);_dropdown=dd;
   const rect=e.target.getBoundingClientRect();
-  dd.style.maxHeight='240px';
+  dd.style.maxHeight='240px';dd.style.overflowY='auto';
   dd.style.left=Math.max(4,Math.min(rect.left+window.scrollX,window.innerWidth-160))+'px';
   if(rect.bottom>window.innerHeight*0.65){
     dd.style.bottom=(window.innerHeight-rect.top-window.scrollY+4)+'px';dd.style.top='auto';
@@ -2027,42 +2013,28 @@ function showAddOncall(e,day){
 }
 
 function refreshCalendar(day){
-  // 変更した日のセルだけ再描画
-  const allDays=getDays();
   const isH=isHeavy(day);
-  if(heavyConfirmed||!isH){
-    renderFullCalendar();
-    renderSummary();
-  } else {
-    renderHeavyCalendar(allDays.filter(isHeavy));
-  }
+  if(heavyConfirmed||!isH){ renderFullCalendar(); renderSummary(); }
+  else { renderHeavyCalendar(getDays().filter(isHeavy)); }
 }
 
-// --- CSVダウンロード ---
 function exportCSV(){
   const days=getDays();
   const m=document.getElementById('target-month').value;
   const[y,mo]=m.split('-').map(Number);
-  let csv=`﻿当直表 ${y}年${mo}月
-日付,曜日,区分,当直,oncall
-`;
+  let csv=`\uFEFF当直表 ${y}年${mo}月\n日付,曜日,区分,当直,oncall\n`;
   days.forEach(day=>{
     const date=new Date(day+'T00:00:00');
     const s=schedule[day]||{tochoku:null,oncall:[]};
     const tMem=fixedConfig.members.find(m=>m.id===s.tochoku);
     const ocNames=s.oncall.map(oid=>fixedConfig.members.find(m=>m.id===oid)?.name||oid).join('・');
     const type=isHeavy(day)?(isClinicHol(day)?'祝日診療':'土日・重祝日'):'平日';
-    csv+=`${date.getMonth()+1}/${date.getDate()},${dowLabel(day)},${type},${tMem?.name||''},${ocNames}
-`;
+    csv+=`${date.getMonth()+1}/${date.getDate()},${dowLabel(day)},${type},${tMem?.name||''},${ocNames}\n`;
   });
-  csv+=`
-個人別集計
-医師,平日当直,休日当直,当直計,平日oncall,休日oncall,oncall計
-`;
+  csv+=`\n個人別集計\n医師,平日当直,休日当直,当直計,平日oncall,休日oncall,oncall計\n`;
   fixedConfig.members.forEach(mem=>{
     const{tW,tH}=countT(mem.id);const{ocW,ocH}=countOC(mem.id);
-    csv+=`${mem.name},${tW},${tH},${tW+tH},${ocW},${ocH},${ocW+ocH}
-`;
+    csv+=`${mem.name},${tW},${tH},${tW+tH},${ocW},${ocH},${ocW+ocH}\n`;
   });
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
