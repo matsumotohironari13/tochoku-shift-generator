@@ -820,22 +820,32 @@ function switchPage(page){
   if(page==='slots')renderSlots();
   if(page==='generate'){
     renderPreCheck();
-    // 既にシフトが生成されている場合はリセットしない
-    const hasHeavySchedule = Object.values(schedule).some(s=>s.tochoku&&isHeavy(Object.keys(schedule).find(k=>schedule[k]===s)));
-    if(!hasHeavySchedule){
-      // 未生成の場合のみリセット
+    const days=getDays();
+    const heavyDays=days.filter(isHeavy);
+    const hasSchedule=heavyDays.some(d=>schedule[d]?.tochoku);
+    if(!hasSchedule){
+      // 未生成：ウィザードをリセット
       ['wizard-step2','wizard-step3','wizard-step4'].forEach(id=>{
         const el=document.getElementById(id);if(el)el.style.display='none';
       });
       document.getElementById('btn-confirm-heavy').style.display='none';
       document.getElementById('btn-regen-heavy').style.display='none';
     } else {
-      // 生成済みの場合はカレンダーを再描画
-      const days=getDays();
-      const heavyDays=days.filter(isHeavy);
-      if(heavyDays.length) renderHeavyCalendar(heavyDays);
-      if(heavyConfirmed) renderFullCalendar();
-      if(heavyConfirmed) renderSummary();
+      // 生成済み：ウィザードを復元
+      document.getElementById('wizard-step2').style.display='block';
+      document.getElementById('btn-confirm-heavy').style.display='';
+      document.getElementById('btn-regen-heavy').style.display='';
+      renderHeavyCalendar(heavyDays);
+      if(heavyConfirmed){
+        document.getElementById('wizard-step3').style.display='block';
+        renderWeekdayCountTable();
+        const hasWeekday=days.filter(d=>!isHeavy(d)).some(d=>schedule[d]?.tochoku);
+        if(hasWeekday){
+          document.getElementById('wizard-step4').style.display='block';
+          renderFullCalendar();
+          renderSummary();
+        }
+      }
     }
   }
 }
@@ -1321,6 +1331,8 @@ function saveMonthlyConfig(){
       prevMonthTochoku,
       monthlyConfig,
       holidays,
+      schedule,
+      heavyConfirmed,
     };
     localStorage.setItem(monthlyKey(),JSON.stringify(data));
   }catch(e){console.error('月次設定の自動保存に失敗:',e);}
@@ -1343,13 +1355,16 @@ function loadMonthlyConfig(){
           if(data.holidays[mem.id])holidays[mem.id]=data.holidays[mem.id];
         });
       }
+      if(data.schedule)Object.assign(schedule,data.schedule);
+      if(data.heavyConfirmed!==undefined)heavyConfirmed=data.heavyConfirmed;
     } else {
-      // 新しい月は初期化
       Object.keys(holTypeOverrides).forEach(k=>delete holTypeOverrides[k]);
       Object.keys(visitingWeekSelected).forEach(k=>delete visitingWeekSelected[k]);
       Object.keys(prevMonthTochoku).forEach(k=>delete prevMonthTochoku[k]);
       Object.keys(monthlyConfig).forEach(k=>delete monthlyConfig[k]);
+      Object.keys(schedule).forEach(k=>delete schedule[k]);
       fixedConfig.members.forEach(mem=>{holidays[mem.id]={};});
+      heavyConfirmed=false;
     }
   }catch(e){console.error('月次設定の読み込みに失敗:',e);}
 }
@@ -1916,6 +1931,8 @@ function generateHeavy(){
   renderHeavyCalendar(heavyDays);
   document.getElementById('btn-confirm-heavy').style.display='';
   document.getElementById('btn-regen-heavy').style.display='';
+
+  saveMonthlyConfig();
 }
 
 function getPrevDayStr(s){
@@ -2003,6 +2020,8 @@ function confirmHeavy(){
   document.getElementById('wizard-step3').style.display='block';
   renderWeekdayCountTable();
   document.getElementById('wizard-step3').scrollIntoView({behavior:'smooth'});
+
+  saveMonthlyConfig();
 }
 
 function generateWeekday(){
@@ -2113,6 +2132,8 @@ function generateWeekday(){
   showWarnings(warnings,'gen-weekday-warnings');
   renderFullCalendar();
   renderSummary();
+
+  saveMonthlyConfig();
 }
 
 function renderSummary(){
@@ -2222,6 +2243,7 @@ function refreshCalendar(day){
   const isH=isHeavy(day);
   if(heavyConfirmed||!isH){renderFullCalendar();renderSummary();}
   else{renderHeavyCalendar(getDays().filter(isHeavy));}
+  saveMonthlyConfig();
 }
 
 function exportCSV(){
