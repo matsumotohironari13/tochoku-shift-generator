@@ -554,7 +554,10 @@ tr:hover td{background:var(--bg)}
                   <th class="left">医師</th>
                   <th>平日当直</th>
                   <th>平日oncall</th>
-                  <th>計</th>
+                  <th style="color:var(--text-3)">休日当直</th>
+                  <th style="color:var(--text-3)">休日oncall</th>
+                  <th>当直計</th>
+                  <th>oncall計</th>
                 </tr>
               </thead>
               <tbody id="weekday-count-tbody"></tbody>
@@ -563,13 +566,19 @@ tr:hover td{background:var(--bg)}
                   <td class="left">合計</td>
                   <td id="wsum-tw"></td>
                   <td id="wsum-ow"></td>
-                  <td id="wsum-wc"></td>
+                  <td id="wsum-th" style="color:var(--text-3)"></td>
+                  <td id="wsum-oh" style="color:var(--text-3)"></td>
+                  <td id="wsum-tc"></td>
+                  <td id="wsum-oc"></td>
                 </tr>
                 <tr class="need-row">
                   <td class="left">必要数</td>
                   <td id="wneed-tw"></td>
                   <td id="wneed-ow"></td>
-                  <td id="wneed-wc"></td>
+                  <td style="color:var(--text-3)">確定済</td>
+                  <td style="color:var(--text-3)">確定済</td>
+                  <td id="wneed-tc"></td>
+                  <td id="wneed-oc"></td>
                 </tr>
               </tfoot>
             </table>
@@ -1620,26 +1629,53 @@ function renderWeekdayCountTable(){
     const color = getMemberColor(mem);
     const disT = !mem.canTochoku;
     const disO = !mem.canOncall;
-    const tc = (cfg.tW||0)+(cfg.ocW||0);
+    const tH = cfg.tH||0;
+    const ocH = cfg.ocH||0;
+    const tW = cfg.tW||0;
+    const ocW = cfg.ocW||0;
+    const tTotal = tW + tH;
+    const ocTotal = ocW + ocH;
     return`<tr>
       <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>${mem.name}</td>
-      <td><input type="number" min="0" max="10" value="${cfg.tW||0}" onchange="updateMonthlyCfg('${mem.id}','tW',+this.value);updateWeekdaySums()" ${disT?'disabled style="opacity:.3"':''}></td>
-      <td><input type="number" min="0" max="10" value="${cfg.ocW||0}" onchange="updateMonthlyCfg('${mem.id}','ocW',+this.value);updateWeekdaySums()" ${disO?'disabled style="opacity:.3"':''}></td>
-      <td style="font-weight:600">${tc}</td>
+      <td><input type="number" min="0" max="10" value="${tW}" onchange="updateMonthlyCfg('${mem.id}','tW',+this.value);updateWeekdaySums()" ${disT?'disabled style="opacity:.3"':''}></td>
+      <td><input type="number" min="0" max="10" value="${ocW}" onchange="updateMonthlyCfg('${mem.id}','ocW',+this.value);updateWeekdaySums()" ${disO?'disabled style="opacity:.3"':''}></td>
+      <td style="color:var(--text-2)">${tH}</td>
+      <td style="color:var(--text-2)">${ocH}</td>
+      <td style="font-weight:600">${tTotal}</td>
+      <td style="font-weight:600">${ocTotal}</td>
     </tr>`;
   }).join('');
   updateWeekdaySums();
 }
 
 function updateWeekdaySums(){
-  const{wdays} = getMonthDayCounts();
+  const{wdays,heavy} = getMonthDayCounts();
+  const visitingH = fixedConfig.specialConditions.filter(c=>c.type==='visiting')
+    .reduce((s,c)=>{const mem=fixedConfig.members.find(m=>m.id===c.memberId);return s+(monthlyConfig[mem?.id]?.tH||0);},0);
+  const needOcH = heavy + visitingH;
   const sumTW = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.tW||0),0);
   const sumOW = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.ocW||0),0);
+  const sumTH = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.tH||0),0);
+  const sumOH = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.ocH||0),0);
   const color=(s,n)=>s===n?'var(--success)':s>n?'var(--danger)':'var(--warn)';
-  const set=(id,v,n)=>{const e=document.getElementById(id);if(e){e.textContent=v;e.style.color=color(v,n);}};
-  set('wsum-tw',sumTW,wdays);set('wsum-ow',sumOW,wdays);set('wsum-wc',sumTW+sumOW,wdays*2);
+  const set=(id,v,n)=>{const e=document.getElementById(id);if(e){e.textContent=v;if(n!==null)e.style.color=color(v,n);}};
+  set('wsum-tw',sumTW,wdays);
+  set('wsum-ow',sumOW,wdays);
+  set('wsum-th',sumTH,null);
+  set('wsum-oh',sumOH,null);
+  set('wsum-tc',sumTW+sumTH,wdays+heavy);
+  set('wsum-oc',sumOW+sumOH,wdays+needOcH);
   ['wneed-tw','wneed-ow'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=wdays});
-  ['wneed-wc'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=wdays*2});
+  const ntc=document.getElementById('wneed-tc');if(ntc)ntc.textContent=wdays+heavy;
+  const noc=document.getElementById('wneed-oc');if(noc)noc.textContent=wdays+needOcH;
+  // 行の合計列も更新
+  const rows=document.querySelectorAll('#weekday-count-tbody tr');
+  fixedConfig.members.forEach((mem,i)=>{
+    if(!rows[i])return;
+    const cfg=monthlyConfig[mem.id]||{};
+    rows[i].cells[5].textContent=(cfg.tW||0)+(cfg.tH||0);
+    rows[i].cells[6].textContent=(cfg.ocW||0)+(cfg.ocH||0);
+  });
   saveMonthlyConfig();
 }
 
@@ -1975,7 +2011,6 @@ function generateWeekday(){
   const warnings=[];
   weekdays.forEach(d=>{schedule[d]={tochoku:null,oncall:[]};});
 
-  // 全メンバーの平日当直を均等配置（前後中3日チェックあり）
   const ordered = [
     ...fixedConfig.members.filter(m=>m.canTochoku&&!m.canOncall&&!isVisitingMember(m.id)),
     ...fixedConfig.members.filter(m=>m.canTochoku&&m.canOncall&&!isVisitingMember(m.id)),
@@ -1984,41 +2019,75 @@ function generateWeekday(){
   ordered.forEach(mem=>{
     const needed = monthlyConfig[mem.id]?.tW || 0;
     if(needed===0) return;
-    let assigned = 0;
     const segSize = weekdays.length / needed;
 
     for(let i=0; i<needed; i++){
       const segStart = Math.floor(i*segSize);
       const segEnd = Math.min(Math.floor((i+1)*segSize)-1, weekdays.length-1);
       const mid = Math.floor((segStart+segEnd)/2);
-      const order=[];
-      const half=Math.max(mid-segStart,segEnd-mid);
-      for(let r=0;r<=half;r++){
-        if(mid-r>=segStart)order.push(mid-r);
-        if(r>0&&mid+r<=segEnd)order.push(mid+r);
-      }
-      let found=false;
-      for(const idx of order){
-        if(canAssignWeekdayTochoku(mem,weekdays[idx])){
-          schedule[weekdays[idx]].tochoku=mem.id;
-          assigned++;found=true;break;
-        }
-      }
-      if(!found){
-        for(const day of weekdays){
-          if(canAssignWeekdayTochoku(mem,day)){
-            schedule[day].tochoku=mem.id;
-            assigned++;found=true;
-            warnings.push(`${day}：${mem.name} セグメント外から割り当て`);
+
+      // 中央から外側へ、セグメントを徐々に広げながら探索
+      // 半径rを広げるごとにセグメント外もカバー
+      let found = false;
+      const maxRadius = weekdays.length; // 最大で全体をカバー
+      const tried = new Set();
+
+      for(let r=0; r<=maxRadius && !found; r++){
+        const candidates = [];
+        if(mid-r >= 0 && !tried.has(mid-r)){ candidates.push(mid-r); tried.add(mid-r); }
+        if(r>0 && mid+r < weekdays.length && !tried.has(mid+r)){ candidates.push(mid+r); tried.add(mid+r); }
+
+        for(const idx of candidates){
+          const day = weekdays[idx];
+          if(canAssignWeekdayTochoku(mem, day)){
+            schedule[day].tochoku = mem.id;
+            found = true;
+            if(idx < segStart || idx > segEnd){
+              warnings.push(`${day}：${mem.name} セグメント外から割り当て`);
+            }
             break;
           }
         }
       }
-      if(!found) warnings.push(`${mem.name}：平日当直スロット${i+1}を割り当てできませんでした（中3日ルール）`);
+
+      // 中3日を緩和して再探索（連日禁止のみ）
+      if(!found){
+        for(const day of weekdays){
+          if(schedule[day]?.tochoku) continue;
+          if(dayState(mem.id,day)>=1) continue;
+          const cur=new Date(day+'T00:00:00');
+          let adjacent=false;
+          for(let di=-1;di<=1;di++){
+            if(di===0)continue;
+            const d=new Date(cur);d.setDate(d.getDate()+di);
+            if(schedule[toDateStr(d)]?.tochoku===mem.id){adjacent=true;break;}
+          }
+          if(adjacent) continue;
+          if(countT(mem.id).tW>=(monthlyConfig[mem.id]?.tW||0)) continue;
+          schedule[day].tochoku=mem.id;
+          found=true;
+          warnings.push(`${day}：${mem.name} 中3日緩和して割り当て`);
+          break;
+        }
+      }
+
+      if(!found) warnings.push(`${mem.name}：平日当直スロット${i+1}を割り当てできませんでした`);
     }
   });
 
-  weekdays.filter(d=>!schedule[d]?.tochoku).forEach(d=>warnings.push(`${d}：平日当直の割り当てなし`));
+  // 空欄を強制的に埋める（空欄禁止）
+  weekdays.filter(d=>!schedule[d]?.tochoku).forEach(day=>{
+    const avail=fixedConfig.members.filter(m=>
+      m.canTochoku&&!isVisitingMember(m.id)&&dayState(m.id,day)<1
+    );
+    avail.sort((a,b)=>countT(a.id).tW-countT(b.id).tW+(Math.random()-.5)*.1);
+    if(avail.length){
+      schedule[day].tochoku=avail[0].id;
+      warnings.push(`${day}：${avail[0].name} 強制割り当て（回数超過）`);
+    } else {
+      warnings.push(`${day}：平日当直の候補者なし`);
+    }
+  });
 
   // 平日oncall
   weekdays.forEach(day=>{
