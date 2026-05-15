@@ -127,6 +127,11 @@ tr:hover td{background:var(--bg)}
 .modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
 /* Save button area */
 .save-bar{background:var(--surface);border-top:1px solid var(--border);padding:14px 32px;display:flex;align-items:center;gap:10px;position:sticky;bottom:0}
+.wizard-step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 24px;margin-bottom:16px;box-shadow:var(--shadow)}
+.wizard-step-header{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}
+.wizard-step-num{width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.wizard-step-title{font-size:15px;font-weight:600;margin-bottom:2px}
+.wizard-step-desc{font-size:12px;color:var(--text-2)}
 /* Calendar */
 .cal-wrap{overflow-x:auto}
 .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(80px,1fr));gap:3px;min-width:560px}
@@ -204,9 +209,7 @@ tr:hover td{background:var(--bg)}
         <button class="nav-item" onclick="switchPage('monthly')" id="nav-monthly">
           <span class="nav-icon">📅</span>月の設定
         </button>
-        <button class="nav-item" onclick="switchPage('count-monthly')" id="nav-count-monthly">
-          <span class="nav-icon">📊</span>今月の回数
-        </button>
+
         <button class="nav-item" onclick="switchPage('holidays')" id="nav-holidays">
           <span class="nav-icon">🙏</span>希望休
         </button>
@@ -434,46 +437,6 @@ tr:hover td{background:var(--bg)}
         </div>
       </div>
 
-      <!-- ========== 今月の回数設定 ========== -->
-      <div class="page" id="page-count-monthly">
-        <div class="page-header">
-          <div class="page-title">今月の回数設定</div>
-          <div class="page-desc">今月の各メンバーの当直・oncall回数を設定します。推奨値を自動計算して表示します。</div>
-        </div>
-        <div class="info" id="monthly-count-info">対象月を選択すると推奨回数が自動計算されます。</div>
-        <div class="card">
-          <div style="overflow-x:auto">
-            <table class="cfg-table">
-              <thead>
-                <tr>
-                  <th style="text-align:left">医師</th>
-                  <th>平日当直</th><th>休日当直</th><th>当直計</th>
-                  <th>平日oncall</th><th>休日oncall</th><th>oncall計</th>
-                </tr>
-              </thead>
-              <tbody id="monthly-count-tbody"></tbody>
-              <tfoot>
-                <tr class="sum-row">
-                  <td style="text-align:left">合計</td>
-                  <td id="sum-tw"></td><td id="sum-th"></td><td id="sum-tc"></td>
-                  <td id="sum-ow"></td><td id="sum-oh"></td><td id="sum-oc"></td>
-                </tr>
-                <tr class="need-row">
-                  <td style="text-align:left">必要数</td>
-                  <td id="need-tw"></td><td id="need-th"></td><td id="need-tc"></td>
-                  <td id="need-ow"></td><td id="need-oh"></td><td id="need-oc"></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <div style="margin-top:12px;display:flex;gap:8px">
-            <button class="btn btn-secondary btn-sm" onclick="validateMonthlyCount()">設定を確認する</button>
-          </div>
-          <div id="monthly-count-warn" style="margin-top:10px"></div>
-        </div>
-      </div>
-
-
       <!-- ========== 希望休 ========== -->
       <div class="page" id="page-holidays">
         <div class="page-header">
@@ -509,29 +472,124 @@ tr:hover td{background:var(--bg)}
       <div class="page" id="page-generate">
         <div class="page-header">
           <div class="page-title">シフト生成</div>
-          <div class="page-desc">土日当直・oncallを自動生成します。生成後に手動で調整し、確定したら平日を生成します。</div>
+          <div class="page-desc">順番に進めてシフトを作成します。</div>
         </div>
 
         <!-- プレチェック -->
         <div class="card" id="gen-precheck"></div>
 
-        <!-- Step9: 土日生成 -->
-        <div id="gen-heavy-section">
+        <!-- STEP1: 休日の回数設定 -->
+        <div class="wizard-step" id="wizard-step1">
+          <div class="wizard-step-header">
+            <div class="wizard-step-num">1</div>
+            <div>
+              <div class="wizard-step-title">休日当直・oncallの回数設定</div>
+              <div class="wizard-step-desc">土日・重祝日の当直とoncallの回数を設定します</div>
+            </div>
+          </div>
+          <div class="info" id="heavy-count-info"></div>
+          <div style="overflow-x:auto">
+            <table class="cfg-table">
+              <thead>
+                <tr>
+                  <th class="left">医師</th>
+                  <th>休日当直</th>
+                  <th>休日oncall</th>
+                  <th>計</th>
+                </tr>
+              </thead>
+              <tbody id="heavy-count-tbody"></tbody>
+              <tfoot>
+                <tr class="sum-row">
+                  <td class="left">合計</td>
+                  <td id="hsum-th"></td>
+                  <td id="hsum-oh"></td>
+                  <td id="hsum-tc"></td>
+                </tr>
+                <tr class="need-row">
+                  <td class="left">必要数</td>
+                  <td id="hneed-th"></td>
+                  <td id="hneed-oh"></td>
+                  <td id="hneed-tc"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div id="heavy-count-warn" style="margin-top:10px"></div>
+          <button class="btn btn-primary" style="margin-top:12px;width:100%;height:40px" onclick="validateHeavyCount()">確認して次へ →</button>
+        </div>
+
+        <!-- STEP2: 休日シフト生成 -->
+        <div class="wizard-step" id="wizard-step2" style="display:none">
+          <div class="wizard-step-header">
+            <div class="wizard-step-num">2</div>
+            <div>
+              <div class="wizard-step-title">休日シフト自動生成・手動調整</div>
+              <div class="wizard-step-desc">土日当直・oncallを自動生成し、手動で調整してください</div>
+            </div>
+          </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-            <button class="btn btn-primary" onclick="generateHeavy()">🎲 土日当直・oncallを自動生成</button>
-            <button class="btn btn-secondary" id="btn-confirm-heavy" onclick="confirmHeavy()" style="display:none">✅ 土日を確定して平日を生成</button>
+            <button class="btn btn-primary" onclick="generateHeavy()">🎲 休日シフトを自動生成</button>
             <button class="btn btn-secondary" id="btn-regen-heavy" onclick="generateHeavy()" style="display:none">🔄 再生成</button>
+            <button class="btn btn-secondary" id="btn-confirm-heavy" onclick="confirmHeavy()" style="display:none">✅ 休日を確定して平日へ進む</button>
           </div>
           <div id="gen-warnings" style="margin-bottom:12px"></div>
           <div id="gen-heavy-calendar"></div>
         </div>
 
-        <!-- Step10: 平日生成 -->
-        <div id="gen-weekday-section" style="display:none">
-          <div class="section-sep"></div>
-          <div style="font-size:15px;font-weight:600;margin-bottom:12px">平日当直・oncall</div>
+        <!-- STEP3: 平日の回数設定 -->
+        <div class="wizard-step" id="wizard-step3" style="display:none">
+          <div class="wizard-step-header">
+            <div class="wizard-step-num">3</div>
+            <div>
+              <div class="wizard-step-title">平日当直・oncallの回数設定</div>
+              <div class="wizard-step-desc">休日の結果を踏まえて平日の回数を設定します</div>
+            </div>
+          </div>
+          <div class="info" id="weekday-count-info"></div>
+          <div style="overflow-x:auto">
+            <table class="cfg-table">
+              <thead>
+                <tr>
+                  <th class="left">医師</th>
+                  <th>平日当直</th>
+                  <th>平日oncall</th>
+                  <th>計</th>
+                </tr>
+              </thead>
+              <tbody id="weekday-count-tbody"></tbody>
+              <tfoot>
+                <tr class="sum-row">
+                  <td class="left">合計</td>
+                  <td id="wsum-tw"></td>
+                  <td id="wsum-ow"></td>
+                  <td id="wsum-wc"></td>
+                </tr>
+                <tr class="need-row">
+                  <td class="left">必要数</td>
+                  <td id="wneed-tw"></td>
+                  <td id="wneed-ow"></td>
+                  <td id="wneed-wc"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div id="weekday-count-warn" style="margin-top:10px"></div>
+          <button class="btn btn-primary" style="margin-top:12px;width:100%;height:40px" onclick="validateWeekdayCount()">確認して次へ →</button>
+        </div>
+
+        <!-- STEP4: 平日シフト生成 -->
+        <div class="wizard-step" id="wizard-step4" style="display:none">
+          <div class="wizard-step-header">
+            <div class="wizard-step-num">4</div>
+            <div>
+              <div class="wizard-step-title">平日シフト自動生成・手動調整</div>
+              <div class="wizard-step-desc">平日当直・oncallを自動生成し、手動で調整してください</div>
+            </div>
+          </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-            <button class="btn btn-secondary" id="btn-regen-weekday" onclick="generateWeekday()">🔄 平日を再生成</button>
+            <button class="btn btn-primary" onclick="generateWeekday()">🎲 平日シフトを自動生成</button>
+            <button class="btn btn-secondary" onclick="generateWeekday()">🔄 再生成</button>
             <button class="btn btn-secondary" onclick="exportCSV()">📥 CSVダウンロード</button>
           </div>
           <div id="gen-weekday-warnings" style="margin-bottom:12px"></div>
@@ -749,10 +807,17 @@ function switchPage(page){
   if(page==='roles')renderRoles();
   if(page==='count-config')renderCountConfig();
   if(page==='monthly'){renderHolType();renderVisitingWeek();renderPrevMonth();}
-  if(page==='count-monthly')renderMonthlyCount();
   if(page==='holidays')renderHolidays();
   if(page==='slots')renderSlots();
-  if(page==='generate')renderPreCheck();
+  if(page==='generate'){
+    renderPreCheck();
+    // ウィザードをリセット
+    ['wizard-step2','wizard-step3','wizard-step4'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.style.display='none';
+    });
+    document.getElementById('btn-confirm-heavy').style.display='none';
+    document.getElementById('btn-regen-heavy').style.display='none';
+  }
 }
 
 // =====================
@@ -1504,7 +1569,173 @@ function countOC(memberId){
   return{ocW,ocH};
 }
 
+// =====================
+// WIZARD FUNCTIONS
+// =====================
 function renderPreCheck(){
+  const el = document.getElementById('gen-precheck');
+  if(!el) return;
+  const m = document.getElementById('target-month').value;
+  if(!m){el.innerHTML='<div class="warn-box">対象月を選択してください</div>';return;}
+  const{wdays,heavy} = getMonthDayCounts();
+  const visiting = fixedConfig.specialConditions.filter(c=>c.type==='visiting');
+  const visitingInfo = visiting.map(c=>{
+    const mem = fixedConfig.members.find(m=>m.id===c.memberId);
+    const sat = visitingWeekSelected[c.memberId];
+    return `${mem?.name||c.memberId}（${sat?new Date(sat+'T00:00:00').getDate()+'日土曜週':'月末自動'}）`;
+  }).join('、');
+  el.innerHTML=`<div style="font-size:13px;line-height:2.2">
+    <div>対象月: <strong>${m}</strong>（平日 ${wdays}日・土日重祝日 ${heavy}日）</div>
+    ${visiting.length?`<div>外勤: <strong>${visitingInfo}</strong></div>`:''}
+  </div>`;
+  renderHeavyCountTable();
+}
+
+function renderHeavyCountTable(){
+  const m = document.getElementById('target-month').value;
+  if(!m) return;
+  const{heavy} = getMonthDayCounts();
+  const visitingH = fixedConfig.specialConditions.filter(c=>c.type==='visiting')
+    .reduce((s,c)=>{const mem=fixedConfig.members.find(m=>m.id===c.memberId);return s+(monthlyConfig[mem?.id]?.tH||0);},0);
+  const needOcH = heavy + visitingH;
+
+  document.getElementById('heavy-count-info').innerHTML =
+    `<strong>${m}</strong>　土日・重祝日 <strong>${heavy}日</strong>　休日oncall必要数 <strong>${needOcH}</strong>`;
+
+  // 未設定なら推奨値を入れる
+  fixedConfig.members.forEach(mem=>{
+    if(!monthlyConfig[mem.id]) monthlyConfig[mem.id]={tW:0,tH:0,ocW:0,ocH:0};
+    if(monthlyConfig[mem.id].tH===undefined) monthlyConfig[mem.id].tH=Math.round((mem.tHMin+mem.tHMax)/2);
+    if(monthlyConfig[mem.id].ocH===undefined) monthlyConfig[mem.id].ocH=Math.round((mem.ocHMin+mem.ocHMax)/2);
+  });
+
+  const tbody = document.getElementById('heavy-count-tbody');
+  tbody.innerHTML = fixedConfig.members.map(mem=>{
+    const cfg = monthlyConfig[mem.id]||{};
+    const color = getMemberColor(mem);
+    const disT = !mem.canTochoku;
+    const disO = !mem.canOncall;
+    const tc = (cfg.tH||0)+(cfg.ocH||0);
+    return`<tr>
+      <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>${mem.name}</td>
+      <td><input type="number" min="0" max="10" value="${cfg.tH||0}" onchange="updateMonthlyCfg('${mem.id}','tH',+this.value);updateHeavySums()" ${disT?'disabled style="opacity:.3"':''}></td>
+      <td><input type="number" min="0" max="10" value="${cfg.ocH||0}" onchange="updateMonthlyCfg('${mem.id}','ocH',+this.value);updateHeavySums()" ${disO?'disabled style="opacity:.3"':''}></td>
+      <td style="font-weight:600">${tc}</td>
+    </tr>`;
+  }).join('');
+  updateHeavySums();
+}
+
+function updateHeavySums(){
+  const{heavy} = getMonthDayCounts();
+  const visitingH = fixedConfig.specialConditions.filter(c=>c.type==='visiting')
+    .reduce((s,c)=>{const mem=fixedConfig.members.find(m=>m.id===c.memberId);return s+(monthlyConfig[mem?.id]?.tH||0);},0);
+  const needOcH = heavy + visitingH;
+  const sumTH = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.tH||0),0);
+  const sumOH = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.ocH||0),0);
+  const color=(s,n)=>s===n?'var(--success)':s>n?'var(--danger)':'var(--warn)';
+  const set=(id,v,n)=>{const e=document.getElementById(id);if(e){e.textContent=v;e.style.color=color(v,n);}};
+  set('hsum-th',sumTH,heavy);set('hsum-oh',sumOH,needOcH);set('hsum-tc',sumTH+sumOH,heavy+needOcH);
+  ['hneed-th'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=heavy});
+  ['hneed-oh'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=needOcH});
+  ['hneed-tc'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=heavy+needOcH});
+  // 行の合計列も更新
+  fixedConfig.members.forEach(mem=>{
+    const cfg=monthlyConfig[mem.id]||{};
+    const tc=(cfg.tH||0)+(cfg.ocH||0);
+    const rows=document.querySelectorAll('#heavy-count-tbody tr');
+    fixedConfig.members.forEach((m,i)=>{
+      if(m.id===mem.id&&rows[i]) rows[i].cells[3].textContent=(monthlyConfig[m.id]?.tH||0)+(monthlyConfig[m.id]?.ocH||0);
+    });
+  });
+  saveMonthlyConfig();
+}
+
+function validateHeavyCount(){
+  const{heavy} = getMonthDayCounts();
+  const visitingH = fixedConfig.specialConditions.filter(c=>c.type==='visiting')
+    .reduce((s,c)=>{const mem=fixedConfig.members.find(m=>m.id===c.memberId);return s+(monthlyConfig[mem?.id]?.tH||0);},0);
+  const needOcH = heavy + visitingH;
+  const sumTH = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.tH||0),0);
+  const sumOH = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.ocH||0),0);
+  const warns=[];
+  if(sumTH!==heavy) warns.push(`休日当直の合計が${sumTH}で、必要数${heavy}と一致しません`);
+  if(sumOH!==needOcH) warns.push(`休日oncallの合計が${sumOH}で、必要数${needOcH}と一致しません`);
+  const el=document.getElementById('heavy-count-warn');
+  if(warns.length){
+    el.innerHTML=`<div class="warn-box">${warns.join('<br>')}</div>`;
+  } else {
+    el.innerHTML='<div class="success-box">✓ 合計が一致しました。シフト生成へ進みます。</div>';
+    setTimeout(()=>{
+      document.getElementById('wizard-step2').style.display='block';
+      document.getElementById('wizard-step2').scrollIntoView({behavior:'smooth'});
+    }, 500);
+  }
+}
+
+function renderWeekdayCountTable(){
+  const m = document.getElementById('target-month').value;
+  if(!m) return;
+  const{wdays} = getMonthDayCounts();
+
+  document.getElementById('weekday-count-info').innerHTML =
+    `<strong>${m}</strong>　平日 <strong>${wdays}日</strong>`;
+
+  fixedConfig.members.forEach(mem=>{
+    if(!monthlyConfig[mem.id]) monthlyConfig[mem.id]={tW:0,tH:0,ocW:0,ocH:0};
+    if(!monthlyConfig[mem.id].tW) monthlyConfig[mem.id].tW=Math.round((mem.tWMin+mem.tWMax)/2);
+    if(!monthlyConfig[mem.id].ocW) monthlyConfig[mem.id].ocW=Math.round((mem.ocWMin+mem.ocWMax)/2);
+  });
+
+  const tbody = document.getElementById('weekday-count-tbody');
+  tbody.innerHTML = fixedConfig.members.map(mem=>{
+    const cfg = monthlyConfig[mem.id]||{};
+    const color = getMemberColor(mem);
+    const disT = !mem.canTochoku;
+    const disO = !mem.canOncall;
+    const tc = (cfg.tW||0)+(cfg.ocW||0);
+    return`<tr>
+      <td class="name"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>${mem.name}</td>
+      <td><input type="number" min="0" max="10" value="${cfg.tW||0}" onchange="updateMonthlyCfg('${mem.id}','tW',+this.value);updateWeekdaySums()" ${disT?'disabled style="opacity:.3"':''}></td>
+      <td><input type="number" min="0" max="10" value="${cfg.ocW||0}" onchange="updateMonthlyCfg('${mem.id}','ocW',+this.value);updateWeekdaySums()" ${disO?'disabled style="opacity:.3"':''}></td>
+      <td style="font-weight:600">${tc}</td>
+    </tr>`;
+  }).join('');
+  updateWeekdaySums();
+}
+
+function updateWeekdaySums(){
+  const{wdays} = getMonthDayCounts();
+  const sumTW = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.tW||0),0);
+  const sumOW = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.ocW||0),0);
+  const color=(s,n)=>s===n?'var(--success)':s>n?'var(--danger)':'var(--warn)';
+  const set=(id,v,n)=>{const e=document.getElementById(id);if(e){e.textContent=v;e.style.color=color(v,n);}};
+  set('wsum-tw',sumTW,wdays);set('wsum-ow',sumOW,wdays);set('wsum-wc',sumTW+sumOW,wdays*2);
+  ['wneed-tw','wneed-ow'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=wdays});
+  ['wneed-wc'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=wdays*2});
+  saveMonthlyConfig();
+}
+
+function validateWeekdayCount(){
+  const{wdays} = getMonthDayCounts();
+  const sumTW = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.tW||0),0);
+  const sumOW = fixedConfig.members.reduce((s,m)=>s+(monthlyConfig[m.id]?.ocW||0),0);
+  const warns=[];
+  if(sumTW!==wdays) warns.push(`平日当直の合計が${sumTW}で、必要数${wdays}と一致しません`);
+  if(sumOW!==wdays) warns.push(`平日oncallの合計が${sumOW}で、必要数${wdays}と一致しません`);
+  const el=document.getElementById('weekday-count-warn');
+  if(warns.length){
+    el.innerHTML=`<div class="warn-box">${warns.join('<br>')}</div>`;
+  } else {
+    el.innerHTML='<div class="success-box">✓ 合計が一致しました。シフト生成へ進みます。</div>';
+    setTimeout(()=>{
+      document.getElementById('wizard-step4').style.display='block';
+      document.getElementById('wizard-step4').scrollIntoView({behavior:'smooth'});
+    }, 500);
+  }
+}
+
+function _unused_renderPreCheck(){
   const el = document.getElementById('gen-precheck');
   if(!el) return;
   const m = document.getElementById('target-month').value;
@@ -1675,6 +1906,18 @@ function generateHeavy(){
     }
   });
 
+  // Step4b: まだ空いている土日（主に日曜）を残り回数のある人で埋める
+  heavyDays.filter(d=>!schedule[d]?.tochoku).forEach(day=>{
+    const avail = fixedConfig.members.filter(m=>canAssignHeavyTochoku(m, day));
+    if(!avail.length){ warnings.push(`${day}：休日当直の候補者なし`); return; }
+    avail.sort((a,b)=>{
+      const ra=monthlyConfig[a.id]?.tH||0, ua=countT(a.id).tH;
+      const rb=monthlyConfig[b.id]?.tH||0, ub=countT(b.id).tH;
+      return (ua-ra)-(ub-rb)+(Math.random()-.5)*.1;
+    });
+    schedule[day].tochoku = avail[0].id;
+  });
+
   // 祝日など土日ペア外
   heavyDays.filter(d=>!pairs.some(p=>p.sat===d||p.sun===d)).forEach(day=>{
     const tDoc = schedule[day]?.tochoku; if(!tDoc) return;
@@ -1787,8 +2030,9 @@ function renderCell(day){
 
 function confirmHeavy(){
   heavyConfirmed=true;
-  document.getElementById('gen-weekday-section').style.display='block';
-  generateWeekday();
+  document.getElementById('wizard-step3').style.display='block';
+  renderWeekdayCountTable();
+  document.getElementById('wizard-step3').scrollIntoView({behavior:'smooth'});
 }
 
 function generateWeekday(){
