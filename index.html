@@ -601,6 +601,7 @@ tr:hover td{background:var(--bg)}
             <button class="btn btn-primary" onclick="generateWeekday()">🎲 平日シフトを自動生成</button>
             <button class="btn btn-secondary" onclick="generateWeekday()">🔄 再生成</button>
             <button class="btn btn-secondary" onclick="exportCSV()">📥 Excelダウンロード</button>
+            <button class="btn btn-secondary" onclick="exportCSVFile()">📄 CSVダウンロード</button>
           </div>
           <div id="gen-weekday-warnings" style="margin-bottom:12px"></div>
           <div id="gen-weekday-calendar"></div>
@@ -2372,6 +2373,38 @@ function importHolidayCode(){
   }catch(e){
     resultEl.innerHTML=`<span style="color:var(--danger)">エラー：${e.message}</span>`;
   }
+}
+
+function exportCSVFile(){
+  const days=getDays();
+  const m=document.getElementById('target-month').value;
+  const[y,mo]=m.split('-').map(Number);
+  let csv=`﻿当直表 ${y}年${mo}月
+日付,曜日,区分,当直,oncall
+`;
+  days.forEach(day=>{
+    const date=new Date(day+'T00:00:00');
+    const s=schedule[day]||{tochoku:null,oncall:[]};
+    const tMem=fixedConfig.members.find(m=>m.id===s.tochoku);
+    const ocNames=s.oncall.map(oid=>fixedConfig.members.find(m=>m.id===oid)?.name||oid).join('・');
+    let type='平日';
+    if(isClinicHol(day)) type='祝日診療';
+    else if(isHeavy(day)) type='土日祝';
+    csv+=`${date.getMonth()+1}/${date.getDate()},${dowLabel(day)},${type},${tMem?.name||''},${ocNames}
+`;
+  });
+  csv+=`
+個人別集計
+医師,平日当直,平日oncall,休日当直,休日oncall,当直計,oncall計
+`;
+  fixedConfig.members.forEach(mem=>{
+    const{tW,tH}=countT(mem.id);const{ocW,ocH}=countOC(mem.id);
+    csv+=`${mem.name},${tW},${ocW},${tH},${ocH},${tW+tH},${ocW+ocH}
+`;
+  });
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`当直表_${y}年${mo}月.csv`;a.click();URL.revokeObjectURL(url);
 }
 
 // =====================
