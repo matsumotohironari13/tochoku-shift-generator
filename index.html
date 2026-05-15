@@ -1053,49 +1053,7 @@ function setPrevTochoku(day,id){if(id)prevMonthTochoku[day]=id;else delete prevM
 // =====================
 // MONTHLY COUNT
 // =====================
-function renderMonthlyCount(){
-  const m=document.getElementById('target-month').value;
-  const infoEl=document.getElementById('monthly-count-info');
-  if(!m){infoEl.textContent='対象月を選択すると推奨回数が自動計算されます。';return;}
-  const{wdays,heavy}=getMonthDayCounts();
-  const visitingH=fixedConfig.specialConditions.filter(c=>c.type==='visiting').reduce((s,c)=>{
-    const mem=getMemberById(c.memberId);return s+(mem?mem.tHMin||0:0);
-  },0);
-  const needOcH=heavy+visitingH;
-  infoEl.innerHTML=`<strong>${m}</strong>　平日 <strong>${wdays}日</strong>　土日・重祝日 <strong>${heavy}日</strong>　休日oncall必要数 <strong>${needOcH}</strong>`;
-
-  // monthlyConfigを初期化（未設定の場合のみ）
-  fixedConfig.members.forEach(mem=>{
-    if(!monthlyConfig[mem.id]){
-      monthlyConfig[mem.id]={
-        tW:Math.round((mem.tWMin+mem.tWMax)/2),
-        tH:Math.round((mem.tHMin+mem.tHMax)/2),
-        ocW:Math.round((mem.ocWMin+mem.ocWMax)/2),
-        ocH:Math.round((mem.ocHMin+mem.ocHMax)/2),
-      };
-    }
-  });
-
-  const tbody=document.getElementById('monthly-count-tbody');
-  tbody.innerHTML=fixedConfig.members.map(mem=>{
-    const cfg=monthlyConfig[mem.id]||{tW:0,tH:0,ocW:0,ocH:0};
-    const color=getMemberColor(mem);
-    const tc=(cfg.tW||0)+(cfg.tH||0);
-    const oc=(cfg.ocW||0)+(cfg.ocH||0);
-    const inp=(field,disabled)=>`<input type="number" min="0" max="15" value="${cfg[field]||0}" onchange="updateMonthlyCfg('${mem.id}','${field}',+this.value)" style="width:46px" ${disabled?'disabled style="opacity:.3"':''}>`;
-    return`<tr>
-      <td><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:5px"></span>${mem.name}</td>
-      <td>${inp('tW',!mem.canTochoku)}</td>
-      <td>${inp('tH',!mem.canTochoku)}</td>
-      <td style="font-weight:600">${tc}</td>
-      <td>${inp('ocW',!mem.canOncall)}</td>
-      <td>${inp('ocH',!mem.canOncall)}</td>
-      <td style="font-weight:600">${oc}</td>
-    </tr>`;
-  }).join('');
-
-  updateMonthlySums();
-}
+function renderMonthlyCount(){ /* deprecated */ }
 
 function updateMonthlyCfg(id,field,val){
   if(!monthlyConfig[id])monthlyConfig[id]={tW:0,tH:0,ocW:0,ocH:0};
@@ -1115,55 +1073,9 @@ function updateMonthlyCfg(id,field,val){
   });
 }
 
-function updateMonthlySums(){
-  const{wdays,heavy}=getMonthDayCounts();
-  const visitingH=fixedConfig.specialConditions.filter(c=>c.type==='visiting').reduce((s,c)=>{
-    const mem=getMemberById(c.memberId);return s+(monthlyConfig[mem?.id]?.tH||0);
-  },0);
-  const needOcH=heavy+visitingH;
+function updateMonthlySums(){ /* deprecated */ }
 
-  const sums={tW:0,tH:0,ocW:0,ocH:0};
-  fixedConfig.members.forEach(m=>{
-    Object.keys(sums).forEach(k=>sums[k]+=(monthlyConfig[m.id]?.[k]||0));
-  });
-  const tc=sums.tW+sums.tH;
-  const oc=sums.ocW+sums.ocH;
-
-  const color=(s,n)=>s===n?'var(--success)':s>n?'var(--danger)':'var(--warn)';
-  const setCell=(id,val,need)=>{
-    const el=document.getElementById(id);
-    if(el){el.textContent=val;el.style.color=color(val,need);}
-  };
-  setCell('sum-tw',sums.tW,wdays);setCell('sum-th',sums.tH,heavy);setCell('sum-tc',tc,wdays+heavy);
-  setCell('sum-ow',sums.ocW,wdays);setCell('sum-oh',sums.ocH,needOcH);setCell('sum-oc',oc,wdays+needOcH);
-  ['need-tw','need-ow'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=wdays});
-  ['need-th'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=heavy});
-  const nte=document.getElementById('need-tc');if(nte)nte.textContent=wdays+heavy;
-  const noe=document.getElementById('need-oh');if(noe)noe.textContent=needOcH;
-  const noce=document.getElementById('need-oc');if(noce)noce.textContent=wdays+needOcH;
-}
-
-function validateMonthlyCount(){
-  const{wdays,heavy}=getMonthDayCounts();
-  const visitingH=fixedConfig.specialConditions.filter(c=>c.type==='visiting').reduce((s,c)=>{
-    const mem=getMemberById(c.memberId);return s+(monthlyConfig[mem?.id]?.tH||0);
-  },0);
-  const needOcH=heavy+visitingH;
-  const sums={tW:0,tH:0,ocW:0,ocH:0};
-  fixedConfig.members.forEach(m=>{Object.keys(sums).forEach(k=>sums[k]+=(monthlyConfig[m.id]?.[k]||0))});
-  const labels={tW:'平日当直',tH:'休日当直',ocW:'平日oncall',ocH:'休日oncall'};
-  const needs={tW:wdays,tH:heavy,ocW:wdays,ocH:needOcH};
-  const diffs=Object.entries(needs).map(([k,need])=>{
-    const diff=sums[k]-need;
-    if(diff>0)return`<span style="color:var(--danger);font-weight:500">▲ ${labels[k]} ${diff}多い</span>`;
-    if(diff<0)return`<span style="color:var(--warn);font-weight:500">▼ ${labels[k]} ${Math.abs(diff)}少ない</span>`;
-    return null;
-  }).filter(Boolean);
-  const el=document.getElementById('monthly-count-warn');
-  el.innerHTML=diffs.length
-    ?`<div class="warn-box">${diffs.join('　')}</div>`
-    :`<div class="success-box">✓ 合計が一致しています</div>`;
-}
+function validateMonthlyCount(){ /* deprecated */ }
 
 // =====================
 // HOLIDAYS
@@ -1207,6 +1119,8 @@ function cycleHol(memberId,day,el){
   el.className='day-chip '+(next===1?'off':next===2?'oncall-only':'')+(isHeavy(day)?' we':'');
   // バッジ更新
   renderHolidays();
+
+  saveMonthlyConfig();
 }
 
 // =====================
@@ -1588,6 +1502,8 @@ function renderPreCheck(){
     <div>対象月: <strong>${m}</strong>（平日 ${wdays}日・土日重祝日 ${heavy}日）</div>
     ${visiting.length?`<div>外勤: <strong>${visitingInfo}</strong></div>`:''}
   </div>`;
+  renderHeavyCountTable();
+
   renderHeavyCountTable();
 }
 
