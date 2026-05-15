@@ -1768,7 +1768,7 @@ function generateHeavy(){
   const pairs = getWeekendPairs();
   heavyConfirmed = false;
   days.forEach(d=>{ schedule[d]={tochoku:null,oncall:[]}; });
-  document.getElementById('gen-weekday-section').style.display='none';
+  document.getElementById('wizard-step4').style.display='none';
   const warnings = [];
 
   // Step1: 八田（外勤）の週を確保
