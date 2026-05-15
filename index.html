@@ -2030,9 +2030,11 @@ function generateWeekday(){
   const warnings=[];
   weekdays.forEach(d=>{schedule[d]={tochoku:null,oncall:[]};});
 
+  // グループ内をシャッフルして毎回異なる結果に
+  const shuffle = arr=>[...arr].sort(()=>Math.random()-.5);
   const ordered = [
-    ...fixedConfig.members.filter(m=>m.canTochoku&&!m.canOncall&&!isVisitingMember(m.id)),
-    ...fixedConfig.members.filter(m=>m.canTochoku&&m.canOncall&&!isVisitingMember(m.id)),
+    ...shuffle(fixedConfig.members.filter(m=>m.canTochoku&&!m.canOncall&&!isVisitingMember(m.id))),
+    ...shuffle(fixedConfig.members.filter(m=>m.canTochoku&&m.canOncall&&!isVisitingMember(m.id))),
   ];
 
   ordered.forEach(mem=>{
@@ -2043,18 +2045,19 @@ function generateWeekday(){
     for(let i=0; i<needed; i++){
       const segStart = Math.floor(i*segSize);
       const segEnd = Math.min(Math.floor((i+1)*segSize)-1, weekdays.length-1);
-      const mid = Math.floor((segStart+segEnd)/2);
+      // セグメント中央にランダムオフセットを加える
+      const segLen = segEnd - segStart + 1;
+      const randomOffset = Math.floor(Math.random() * segLen);
+      const mid = segStart + randomOffset;
 
       // 中央から外側へ、セグメントを徐々に広げながら探索
-      // 半径rを広げるごとにセグメント外もカバー
       let found = false;
-      const maxRadius = weekdays.length; // 最大で全体をカバー
       const tried = new Set();
 
-      for(let r=0; r<=maxRadius && !found; r++){
+      for(let r=0; r<=weekdays.length && !found; r++){
         const candidates = [];
-        if(mid-r >= 0 && !tried.has(mid-r)){ candidates.push(mid-r); tried.add(mid-r); }
-        if(r>0 && mid+r < weekdays.length && !tried.has(mid+r)){ candidates.push(mid+r); tried.add(mid+r); }
+        if(mid-r >= 0 && !tried.has(mid-r)){candidates.push(mid-r);tried.add(mid-r);}
+        if(r>0 && mid+r < weekdays.length && !tried.has(mid+r)){candidates.push(mid+r);tried.add(mid+r);}
 
         for(const idx of candidates){
           const day = weekdays[idx];
@@ -2071,7 +2074,8 @@ function generateWeekday(){
 
       // 中3日を緩和して再探索（連日禁止のみ）
       if(!found){
-        for(const day of weekdays){
+        const shuffledDays = shuffle(weekdays);
+        for(const day of shuffledDays){
           if(schedule[day]?.tochoku) continue;
           if(dayState(mem.id,day)>=1) continue;
           const cur=new Date(day+'T00:00:00');
@@ -2132,7 +2136,6 @@ function generateWeekday(){
   showWarnings(warnings,'gen-weekday-warnings');
   renderFullCalendar();
   renderSummary();
-
   saveMonthlyConfig();
 }
 
