@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>シフト作成アプリ</title>
 <style>
@@ -599,7 +600,7 @@ tr:hover td{background:var(--bg)}
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
             <button class="btn btn-primary" onclick="generateWeekday()">🎲 平日シフトを自動生成</button>
             <button class="btn btn-secondary" onclick="generateWeekday()">🔄 再生成</button>
-            <button class="btn btn-secondary" onclick="exportCSV()">📥 CSVダウンロード</button>
+            <button class="btn btn-secondary" onclick="exportCSV()">📥 Excelダウンロード</button>
           </div>
           <div id="gen-weekday-warnings" style="margin-bottom:12px"></div>
           <div id="gen-weekday-calendar"></div>
@@ -2143,7 +2144,7 @@ function renderSummary(){
   const el=document.getElementById('gen-summary');
   let html=`<div class="card"><div class="card-title"><span class="icon">📊</span>個人別集計</div>
   <div style="overflow-x:auto"><table class="sum-tbl"><thead><tr>
-    <th>医師</th><th>平日当直</th><th>休日当直</th><th>当直計</th><th>平日oncall</th><th>休日oncall</th><th>oncall計</th>
+    <th>医師</th><th>平日当直</th><th>平日oncall</th><th>休日当直</th><th>休日oncall</th><th>当直計</th><th>oncall計</th>
   </tr></thead><tbody>`;
   fixedConfig.members.forEach(mem=>{
     const{tW,tH}=countT(mem.id);
@@ -2157,10 +2158,10 @@ function renderSummary(){
         <span onmouseenter="highlightDoctor('${mem.id}')" onmouseleave="highlightDoctor(null)" style="cursor:default">${mem.name}</span>
       </td>
       <td style="color:${c(tW,cfgTW)}">${tW}<span style="font-size:10px;color:var(--text-3)">/${cfgTW}</span></td>
-      <td style="color:${c(tH,cfgTH)}">${tH}<span style="font-size:10px;color:var(--text-3)">/${cfgTH}</span></td>
-      <td style="font-weight:600;color:${c(tW+tH,cfgTW+cfgTH)}">${tW+tH}<span style="font-size:10px;color:var(--text-3)">/${cfgTW+cfgTH}</span></td>
       <td style="color:${c(ocW,cfgOW)}">${ocW}<span style="font-size:10px;color:var(--text-3)">/${cfgOW}</span></td>
+      <td style="color:${c(tH,cfgTH)}">${tH}<span style="font-size:10px;color:var(--text-3)">/${cfgTH}</span></td>
       <td style="color:${c(ocH,cfgOH)}">${ocH}<span style="font-size:10px;color:var(--text-3)">/${cfgOH}</span></td>
+      <td style="font-weight:600;color:${c(tW+tH,cfgTW+cfgTH)}">${tW+tH}<span style="font-size:10px;color:var(--text-3)">/${cfgTW+cfgTH}</span></td>
       <td style="font-weight:600;color:${c(ocW+ocH,cfgOW+cfgOH)}">${ocW+ocH}<span style="font-size:10px;color:var(--text-3)">/${cfgOW+cfgOH}</span></td>
     </tr>`;
   });
@@ -2253,30 +2254,60 @@ function exportCSV(){
   const days=getDays();
   const m=document.getElementById('target-month').value;
   const[y,mo]=m.split('-').map(Number);
-  let csv=`﻿当直表 ${y}年${mo}月
-日付,曜日,区分,当直,oncall
-`;
+
+  const wb = XLSX.utils.book_new();
+
+  // --- シフト表シート ---
+  const wsData = [[`当直表 ${y}年${mo}月`,'','','',''],['日付','曜日','区分','当直','oncall']];
+  const rowTypes = [null, null];
+
   days.forEach(day=>{
     const date=new Date(day+'T00:00:00');
     const s=schedule[day]||{tochoku:null,oncall:[]};
     const tMem=fixedConfig.members.find(m=>m.id===s.tochoku);
     const ocNames=s.oncall.map(oid=>fixedConfig.members.find(m=>m.id===oid)?.name||oid).join('・');
-    const type=isHeavy(day)?(isClinicHol(day)?'祝日診療':'土日・重祝日'):'平日';
-    csv+=`${date.getMonth()+1}/${date.getDate()},${dowLabel(day)},${type},${tMem?.name||''},${ocNames}
-`;
+    const dow=new Date(day+'T00:00:00').getDay();
+    let type='平日';
+    if(isClinicHol(day)) type='祝日診療';
+    else if(isHeavy(day)) type='土日祝';
+    wsData.push([`${date.getMonth()+1}/${date.getDate()}`,dowLabel(day),type,tMem?.name||'',ocNames]);
+    rowTypes.push({dow, heavy:isHeavy(day), clinic:isClinicHol(day)});
   });
-  csv+=`
-個人別集計
-医師,平日当直,休日当直,当直計,平日oncall,休日oncall,oncall計
-`;
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=[{wch:8},{wch:4},{wch:8},{wch:8},{wch:20}];
+
+  // 色付け
+  const satFill={patternType:'solid',fgColor:{rgb:'DDEEFF'}};
+  const sunFill={patternType:'solid',fgColor:{rgb:'FFE0E0'}};
+
+  rowTypes.forEach((meta,rowIdx)=>{
+    if(!meta) return;
+    const isSat = meta.dow===6;
+    const isSunOrHol = meta.dow===0 || (meta.heavy && !meta.clinic);
+    const fill = isSat ? satFill : isSunOrHol ? sunFill : null;
+    if(!fill) return;
+    ['A','B','C','D','E'].forEach(col=>{
+      const ref = col+(rowIdx+1);
+      if(!ws[ref]) ws[ref]={v:'',t:'s'};
+      if(!ws[ref].s) ws[ref].s={};
+      ws[ref].s.fill = fill;
+    });
+  });
+
+  XLSX.utils.book_append_sheet(wb, ws, 'シフト表');
+
+  // --- 個人別集計シート ---
+  const sumData=[['医師','平日当直','平日oncall','休日当直','休日oncall','当直計','oncall計']];
   fixedConfig.members.forEach(mem=>{
     const{tW,tH}=countT(mem.id);const{ocW,ocH}=countOC(mem.id);
-    csv+=`${mem.name},${tW},${tH},${tW+tH},${ocW},${ocH},${ocW+ocH}
-`;
+    sumData.push([mem.name,tW,ocW,tH,ocH,tW+tH,ocW+ocH]);
   });
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=`当直表_${y}年${mo}月.csv`;a.click();URL.revokeObjectURL(url);
+  const ws2=XLSX.utils.aoa_to_sheet(sumData);
+  ws2['!cols']=[{wch:8},{wch:8},{wch:10},{wch:8},{wch:10},{wch:6},{wch:8}];
+  XLSX.utils.book_append_sheet(wb, ws2, '個人別集計');
+
+  XLSX.writeFile(wb, `当直表_${y}年${mo}月.xlsx`);
 }
 
 // =====================
