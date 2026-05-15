@@ -811,12 +811,23 @@ function switchPage(page){
   if(page==='slots')renderSlots();
   if(page==='generate'){
     renderPreCheck();
-    // ウィザードをリセット
-    ['wizard-step2','wizard-step3','wizard-step4'].forEach(id=>{
-      const el=document.getElementById(id);if(el)el.style.display='none';
-    });
-    document.getElementById('btn-confirm-heavy').style.display='none';
-    document.getElementById('btn-regen-heavy').style.display='none';
+    // 既にシフトが生成されている場合はリセットしない
+    const hasHeavySchedule = Object.values(schedule).some(s=>s.tochoku&&isHeavy(Object.keys(schedule).find(k=>schedule[k]===s)));
+    if(!hasHeavySchedule){
+      // 未生成の場合のみリセット
+      ['wizard-step2','wizard-step3','wizard-step4'].forEach(id=>{
+        const el=document.getElementById(id);if(el)el.style.display='none';
+      });
+      document.getElementById('btn-confirm-heavy').style.display='none';
+      document.getElementById('btn-regen-heavy').style.display='none';
+    } else {
+      // 生成済みの場合はカレンダーを再描画
+      const days=getDays();
+      const heavyDays=days.filter(isHeavy);
+      if(heavyDays.length) renderHeavyCalendar(heavyDays);
+      if(heavyConfirmed) renderFullCalendar();
+      if(heavyConfirmed) renderSummary();
+    }
   }
 }
 
