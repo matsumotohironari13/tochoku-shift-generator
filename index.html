@@ -1696,58 +1696,62 @@ function generateHeavy(){
     if(sat){ const p=pairs.find(p=>p.sat===sat); if(p){if(p.sat)tgt.push(p.sat);if(p.sun)tgt.push(p.sun);} }
     if(!tgt.length) tgt = heavyDays.slice(-2);
     tgt.forEach(day=>{ schedule[day].tochoku = mem.id; });
-    if(tgt.length<2) warnings.push(`${mem.name}：土日2連続確保できませんでした`);
   });
 
-  // Step2: 虚血グループを均等配置（土日総数−5日分）
-  // 八田2日・不整脈3日=5日を引いた残りが虚血の枠
+  // Step2: 虚血グループを土日全体に均等配置
+  // 各人のスロットを月全体に均等に割り当て（土日どちらでも可）
   const ischemicMembers = fixedConfig.members.filter(m=>
     m.canTochoku && m.canOncall && !isVisitingMember(m.id) &&
     (monthlyConfig[m.id]?.tH||0) > 0
   );
-
-  // 空き土曜リスト（外勤済み除く）
-  const availSats = pairs.filter(p=>!schedule[p.sat]?.tochoku).map(p=>p.sat);
-
-  // 全虚血スロットを月全体に均等配置
-  const slots = [];
   ischemicMembers.sort((a,b)=>(monthlyConfig[b.id]?.tH||0)-(monthlyConfig[a.id]?.tH||0));
+
+  // 全スロットを生成
+  const slots = [];
   ischemicMembers.forEach(mem=>{
     for(let i=0;i<(monthlyConfig[mem.id]?.tH||0);i++) slots.push(mem);
   });
 
-  const assignedCount = {};
-  ischemicMembers.forEach(m=>{assignedCount[m.id]=0;});
+  // 空き土日リスト（外勤済み除く）
+  const availDays = heavyDays.filter(d=>!schedule[d]?.tochoku);
 
   slots.forEach((mem, slotIdx)=>{
-    if(assignedCount[mem.id] >= (monthlyConfig[mem.id]?.tH||0)) return;
-    const targetIdx = Math.floor((slotIdx + 0.5) * (availSats.length / slots.length));
+    if(countT(mem.id).tH >= (monthlyConfig[mem.id]?.tH||0)) return;
+
+    // 目標インデックスを月全体に均等配置
+    const targetIdx = Math.floor((slotIdx + 0.5) * (availDays.length / slots.length));
+
+    // 目標インデックス付近から探索（同一週に既に入っていない日を優先）
     const order = [];
-    for(let r=0; r<availSats.length; r++){
-      if(targetIdx-r >= 0) order.push(targetIdx-r);
-      if(r>0 && targetIdx+r < availSats.length) order.push(targetIdx+r);
+    const seen = new Set();
+    for(let r=0; r<availDays.length; r++){
+      if(targetIdx-r >= 0 && !seen.has(targetIdx-r)){order.push(targetIdx-r);seen.add(targetIdx-r);}
+      if(r>0 && targetIdx+r < availDays.length && !seen.has(targetIdx+r)){order.push(targetIdx+r);seen.add(targetIdx+r);}
     }
-    const seen=new Set();
-    for(const idx of order.filter(i=>{if(seen.has(i))return false;seen.add(i);return true;})){
-      const satDay = availSats[idx];
-      if(!satDay || schedule[satDay]?.tochoku) continue;
-      if(dayState(mem.id, satDay) >= 1) continue;
-      schedule[satDay].tochoku = mem.id;
-      assignedCount[mem.id]++;
+
+    for(const idx of order){
+      const day = availDays[idx];
+      if(!day || schedule[day]?.tochoku) continue;
+      if(dayState(mem.id, day) >= 1) continue;
+
+      // 同じ週（ペア）に既にこの人が入っていないか確認
+      const pair = pairs.find(p=>p.sat===day||p.sun===day);
+      const partnerDay = pair ? (pair.sat===day ? pair.sun : pair.sat) : null;
+      if(partnerDay && schedule[partnerDay]?.tochoku === mem.id) continue; // 同週に既に入っている
+
+      schedule[day].tochoku = mem.id;
       break;
     }
   });
 
-  // Step3: 残りの土日に不整脈グループを配置（シャッフルで毎回変化）
+  // Step3: 残りの土日に不整脈グループを配置（シャッフル）
   const arrhMembers = fixedConfig.members.filter(m=>
     m.canTochoku && !m.canOncall && !isVisitingMember(m.id) &&
     (monthlyConfig[m.id]?.tH||0) > 0
   );
-
   arrhMembers.forEach(mem=>{
     const needed = monthlyConfig[mem.id]?.tH || 0;
     let assigned = 0;
-    // シャッフルして毎回異なる日に入るように
     const shuffled = [...heavyDays].sort(()=>Math.random()-0.5);
     for(const day of shuffled){
       if(assigned >= needed) break;
@@ -1760,7 +1764,28 @@ function generateHeavy(){
       warnings.push(`${mem.name}：休日当直${needed}回を確保できませんでした（${assigned}回）`);
   });
 
-  // Step4: oncallを土日セットで配置
+  // Step4: まだ空いている土日を埋める（空欄禁止・回数超過でも可）
+  heavyDays.filter(d=>!schedule[d]?.tochoku).forEach(day=>{
+    const avail = fixedConfig.members.filter(m=>canAssignHeavyTochoku(m, day));
+    if(!avail.length){
+      // 回数超過でも希望休でなければ入れる
+      const fallback = fixedConfig.members.filter(m=>
+        m.canTochoku && !isVisitingMember(m.id) && dayState(m.id,day)<1
+      );
+      fallback.sort((a,b)=>countT(a.id).tH-countT(b.id).tH+(Math.random()-.5)*.1);
+      if(fallback.length) schedule[day].tochoku = fallback[0].id;
+      else warnings.push(`${day}：休日当直の候補者なし`);
+      return;
+    }
+    avail.sort((a,b)=>{
+      const ra=monthlyConfig[a.id]?.tH||0, ua=countT(a.id).tH;
+      const rb=monthlyConfig[b.id]?.tH||0, ub=countT(b.id).tH;
+      return (ua-ra)-(ub-rb)+(Math.random()-.5)*.1;
+    });
+    schedule[day].tochoku = avail[0].id;
+  });
+
+  // Step5: oncallを配置（同一週に当直が入っている人を優先）
   pairs.forEach(pair=>{
     const satDay = pair.sat;
     const sunDay = pair.sun;
@@ -1772,9 +1797,9 @@ function generateHeavy(){
       const needed = getOncallNeeded(tDoc);
       const avail = pool.filter(m=>canAssignOncall(m,satDay,tDoc,true));
       avail.sort((a,b)=>{
-        // 同じ週の日曜に当直が入っている人を優先
-        const aW=sunDay&&schedule[sunDay]?.tochoku===a.id?-15:0;
-        const bW=sunDay&&schedule[sunDay]?.tochoku===b.id?-15:0;
+        // 同じ週の日曜に当直が入っている人を強く優先
+        const aW = sunDay&&schedule[sunDay]?.tochoku===a.id ? -20 : 0;
+        const bW = sunDay&&schedule[sunDay]?.tochoku===b.id ? -20 : 0;
         const ra=monthlyConfig[a.id]?.ocH||0, ua=countOC(a.id).ocH;
         const rb=monthlyConfig[b.id]?.ocH||0, ub=countOC(b.id).ocH;
         return (ua-ra+aW)-(ub-rb+bW)+(Math.random()-.5)*.1;
@@ -1787,26 +1812,20 @@ function generateHeavy(){
         if(chosen.length<needed) warnings.push(`${satDay}(${tDoc})：oncall${needed}人必要→${chosen.length}人のみ`);
       }
       schedule[satDay].oncall = chosen.map(m=>m.id);
-
-      // 土曜oncall→日曜当直セット：日曜が空いていれば土曜oncall1人目を割り当て
-      if(sunDay && !schedule[sunDay]?.tochoku && chosen.length>0){
-        const candidate = fixedConfig.members.find(m=>m.id===chosen[0].id);
-        if(candidate && canAssignHeavyTochoku(candidate, sunDay)){
-          schedule[sunDay].tochoku = candidate.id;
-        }
-      }
     }
 
     // 日曜oncall
     if(sunDay && schedule[sunDay]?.tochoku){
       const tDoc = schedule[sunDay].tochoku;
       const satTDoc = schedule[satDay]?.tochoku;
+      const satOncall = schedule[satDay]?.oncall||[];
       const pool = getOncallPool(tDoc);
       const needed = getOncallNeeded(tDoc);
       const avail = pool.filter(m=>canAssignOncall(m,sunDay,tDoc,true));
       avail.sort((a,b)=>{
-        // 土曜当直者を日曜oncallに優先（セット）
-        const aB=a.id===satTDoc?-15:0, bB=b.id===satTDoc?-15:0;
+        // 土曜当直者・土曜oncall者を優先（同一週集約）
+        const aB = a.id===satTDoc ? -20 : satOncall.includes(a.id) ? -10 : 0;
+        const bB = b.id===satTDoc ? -20 : satOncall.includes(b.id) ? -10 : 0;
         const ra=monthlyConfig[a.id]?.ocH||0, ua=countOC(a.id).ocH;
         const rb=monthlyConfig[b.id]?.ocH||0, ub=countOC(b.id).ocH;
         return (ua-ra+aB)-(ub-rb+bB)+(Math.random()-.5)*.1;
@@ -1820,18 +1839,6 @@ function generateHeavy(){
       }
       schedule[sunDay].oncall = chosen.map(m=>m.id);
     }
-  });
-
-  // Step4b: まだ空いている土日（主に日曜）を残り回数のある人で埋める
-  heavyDays.filter(d=>!schedule[d]?.tochoku).forEach(day=>{
-    const avail = fixedConfig.members.filter(m=>canAssignHeavyTochoku(m, day));
-    if(!avail.length){ warnings.push(`${day}：休日当直の候補者なし`); return; }
-    avail.sort((a,b)=>{
-      const ra=monthlyConfig[a.id]?.tH||0, ua=countT(a.id).tH;
-      const rb=monthlyConfig[b.id]?.tH||0, ub=countT(b.id).tH;
-      return (ua-ra)-(ub-rb)+(Math.random()-.5)*.1;
-    });
-    schedule[day].tochoku = avail[0].id;
   });
 
   // 祝日など土日ペア外
@@ -1850,7 +1857,7 @@ function generateHeavy(){
     schedule[day].oncall = chosen.map(m=>m.id);
   });
 
-  // Step5終了後：実際の回数で検証
+  // 最終検証
   fixedConfig.members.filter(m=>!isVisitingMember(m.id)).forEach(mem=>{
     const needed = monthlyConfig[mem.id]?.tH || 0;
     const actual = countT(mem.id).tH;
