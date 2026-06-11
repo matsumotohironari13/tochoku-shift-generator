@@ -2140,7 +2140,18 @@ function generateWeekday(){
     return false;
   }
 
+  // デバッグ: 各平日の初期候補数をコンソール出力
+  console.log('=== 平日生成デバッグ ===');
+  console.log('対象メンバー:', tochokuMembers.map(m=>`${m.name}(${remaining[m.id]}回)`).join(', '));
+  console.log('平日枠数:', weekdays.length, '必要回数合計:', Object.values(remaining).reduce((a,b)=>a+b,0));
+  weekdays.forEach(d=>{
+    const c = candidatesFor(d, {});
+    console.log(`${d}: 候補${c.length}人 [${c.map(m=>m.name).join(',')}]`);
+  });
+  console.log('前月当直:', JSON.stringify(prevMonthTochoku));
+
   const solved = backtrack([...weekdays]);
+  console.log('解けた:', solved, 'タイムアウト:', timedOut);
 
   // 結果を反映
   if(solved){
