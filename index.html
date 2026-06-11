@@ -1432,6 +1432,23 @@ function hasRecentTochokuBoth(memberId, day){
   return false;
 }
 
+// 中N日ルール: 前後(N+1)日以内に同一人物の当直があればtrue（休日含む）
+function hasNearbyTochoku(memberId, day, n){
+  const span = n; // 中4日(n=4)なら前後4日以内に当直があればNG（=5日以上空ける）
+  const cur = new Date(day+'T00:00:00');
+  for(let i=1; i<=span; i++){
+    const dp = new Date(cur); dp.setDate(dp.getDate()-i);
+    if(schedule[toDateStr(dp)]?.tochoku === memberId) return true;
+    const df = new Date(cur); df.setDate(df.getDate()+i);
+    if(schedule[toDateStr(df)]?.tochoku === memberId) return true;
+  }
+  // 前月当直も考慮
+  for(const [pd, pid] of Object.entries(prevMonthTochoku)){
+    if(pid === memberId && getDayDiff(day, pd) <= span) return true;
+  }
+  return false;
+}
+
 function dayState(memberId, day){
   return (holidays[memberId]||{})[day] || 0;
 }
@@ -1459,7 +1476,8 @@ function canAssignWeekdayTochoku(member, day){
   if(!member.canTochoku) return false;
   if(dayState(member.id, day) >= 1) return false;
   if(schedule[day]?.tochoku) return false;
-  if(hasRecentTochokuBoth(member.id, day)) return false;
+  // 中4日ルール（前後5日以上空ける、休日当直も含む）
+  if(hasNearbyTochoku(member.id, day, 4)) return false;
   const used = countT(member.id).tW;
   const needed = monthlyConfig[member.id]?.tW || 0;
   if(used >= needed) return false;
@@ -2032,103 +2050,63 @@ function generateWeekday(){
   const warnings=[];
   weekdays.forEach(d=>{schedule[d]={tochoku:null,oncall:[]};});
 
-  // グループ内をシャッフルして毎回異なる結果に
-  const shuffle = arr=>[...arr].sort(()=>Math.random()-.5);
-  const ordered = [
-    ...shuffle(fixedConfig.members.filter(m=>m.canTochoku&&!m.canOncall&&!isVisitingMember(m.id))),
-    ...shuffle(fixedConfig.members.filter(m=>m.canTochoku&&m.canOncall&&!isVisitingMember(m.id))),
-  ];
+  // 平日の希望休数をカウント（休み=1のみ）
+  const weekdayOffCount = mem=>{
+    return weekdays.filter(d=>dayState(mem.id,d)===1).length;
+  };
 
-  ordered.forEach(mem=>{
+  // 割り当て順：当直回数の多い順 → 希望休の多い順 → ランダム
+  const tochokuMembers = fixedConfig.members.filter(m=>
+    m.canTochoku && !isVisitingMember(m.id) && (monthlyConfig[m.id]?.tW||0)>0
+  );
+  tochokuMembers.sort((a,b)=>{
+    const na=monthlyConfig[a.id]?.tW||0, nb=monthlyConfig[b.id]?.tW||0;
+    if(nb!==na) return nb-na; // 回数多い順
+    const oa=weekdayOffCount(a), ob=weekdayOffCount(b);
+    if(ob!==oa) return ob-oa; // 希望休多い順
+    return Math.random()-0.5; // 同点ランダム
+  });
+
+  // 各メンバーの平日当直を中4日厳守でランダム配置
+  tochokuMembers.forEach(mem=>{
     const needed = monthlyConfig[mem.id]?.tW || 0;
-    if(needed===0) return;
-    const segSize = weekdays.length / needed;
-
     for(let i=0; i<needed; i++){
-      const segStart = Math.floor(i*segSize);
-      const segEnd = Math.min(Math.floor((i+1)*segSize)-1, weekdays.length-1);
-      // セグメント中央にランダムオフセットを加える
-      const segLen = segEnd - segStart + 1;
-      const randomOffset = Math.floor(Math.random() * segLen);
-      const mid = segStart + randomOffset;
-
-      // 中央から外側へ、セグメントを徐々に広げながら探索
-      let found = false;
-      const tried = new Set();
-
-      for(let r=0; r<=weekdays.length && !found; r++){
-        const candidates = [];
-        if(mid-r >= 0 && !tried.has(mid-r)){candidates.push(mid-r);tried.add(mid-r);}
-        if(r>0 && mid+r < weekdays.length && !tried.has(mid+r)){candidates.push(mid+r);tried.add(mid+r);}
-
-        for(const idx of candidates){
-          const day = weekdays[idx];
-          if(canAssignWeekdayTochoku(mem, day)){
-            schedule[day].tochoku = mem.id;
-            found = true;
-            if(idx < segStart || idx > segEnd){
-              warnings.push(`${day}：${mem.name} セグメント外から割り当て`);
-            }
-            break;
-          }
-        }
+      // 配置可能な空き平日を全部集める
+      const candidates = weekdays.filter(d=>canAssignWeekdayTochoku(mem, d));
+      if(candidates.length===0){
+        warnings.push(`${mem.name}：平日当直スロット${i+1}を割り当てできませんでした（中4日ルール）`);
+        continue;
       }
-
-      // 中3日を緩和して再探索（連日禁止のみ）
-      if(!found){
-        const shuffledDays = shuffle(weekdays);
-        for(const day of shuffledDays){
-          if(schedule[day]?.tochoku) continue;
-          if(dayState(mem.id,day)>=1) continue;
-          const cur=new Date(day+'T00:00:00');
-          let adjacent=false;
-          for(let di=-1;di<=1;di++){
-            if(di===0)continue;
-            const d=new Date(cur);d.setDate(d.getDate()+di);
-            if(schedule[toDateStr(d)]?.tochoku===mem.id){adjacent=true;break;}
-          }
-          if(adjacent) continue;
-          if(countT(mem.id).tW>=(monthlyConfig[mem.id]?.tW||0)) continue;
-          schedule[day].tochoku=mem.id;
-          found=true;
-          warnings.push(`${day}：${mem.name} 中3日緩和して割り当て`);
-          break;
-        }
-      }
-
-      if(!found) warnings.push(`${mem.name}：平日当直スロット${i+1}を割り当てできませんでした`);
+      // ランダムに1つ選ぶ
+      const day = candidates[Math.floor(Math.random()*candidates.length)];
+      schedule[day].tochoku = mem.id;
     }
   });
 
-  // 空欄を強制的に埋める（空欄禁止）
-  weekdays.filter(d=>!schedule[d]?.tochoku).forEach(day=>{
-    const avail=fixedConfig.members.filter(m=>
-      m.canTochoku&&!isVisitingMember(m.id)&&dayState(m.id,day)<1
-    );
-    avail.sort((a,b)=>countT(a.id).tW-countT(b.id).tW+(Math.random()-.5)*.1);
-    if(avail.length){
-      schedule[day].tochoku=avail[0].id;
-      warnings.push(`${day}：${avail[0].name} 強制割り当て（回数超過）`);
-    } else {
-      warnings.push(`${day}：平日当直の候補者なし`);
-    }
+  // 空欄チェック（埋めずに警告のみ）
+  weekdays.filter(d=>!schedule[d]?.tochoku).forEach(d=>{
+    warnings.push(`${d}：平日当直が空欄です（手動調整してください）`);
   });
 
-  // 平日oncall
+  // 平日oncall：当直確定後に配置
+  // 不整脈当直日の虚血oncallは設定値に関わらず残り回数の少ない人を強く優先
   weekdays.forEach(day=>{
     const tDoc=schedule[day]?.tochoku;if(!tDoc)return;
     const pool=getOncallPool(tDoc);
     const needed=getOncallNeeded(tDoc);
     const avail=pool.filter(m=>canAssignOncall(m,day,tDoc,false));
+    // 残りoncall回数の多い人（=まだ入れていない人）を優先 → 均等化
     avail.sort((a,b)=>{
-      const ra=monthlyConfig[a.id]?.ocW||0,ua=countOC(a.id).ocW;
-      const rb=monthlyConfig[b.id]?.ocW||0,ub=countOC(b.id).ocW;
-      return (ua-ra)-(ub-rb)+(Math.random()-.5)*.1;
+      const ua=countOC(a.id).ocW, ub=countOC(b.id).ocW;
+      if(ua!==ub) return ua-ub; // 既に入れた回数の少ない人を優先
+      return Math.random()-0.5;
     });
     let chosen=avail.slice(0,needed);
     if(chosen.length<needed){
       const fb1=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&countOC(m.id).ocW<(monthlyConfig[m.id]?.ocW||0));
       const fb2=pool.filter(m=>m.id!==tDoc&&dayState(m.id,day)!==1&&!isNGPair(tDoc,m.id)&&!chosen.includes(m)&&!fb1.includes(m));
+      fb1.sort((a,b)=>countOC(a.id).ocW-countOC(b.id).ocW+(Math.random()-.5)*.1);
+      fb2.sort((a,b)=>countOC(a.id).ocW-countOC(b.id).ocW+(Math.random()-.5)*.1);
       [...fb1,...fb2].forEach(m=>{if(chosen.length<needed)chosen.push(m);});
       if(chosen.length<needed)warnings.push(`${day}：oncall${needed}人必要→${chosen.length}人のみ`);
     }
