@@ -2050,147 +2050,111 @@ function generateWeekday(){
   const warnings=[];
   weekdays.forEach(d=>{schedule[d]={tochoku:null,oncall:[]};});
 
-  // 平日の希望休数
-  const weekdayOffCount = mem=>weekdays.filter(d=>dayState(mem.id,d)===1).length;
-
-  // 当直対象メンバーと必要回数
   const tochokuMembers = fixedConfig.members.filter(m=>
     m.canTochoku && !isVisitingMember(m.id) && (monthlyConfig[m.id]?.tW||0)>0
   );
 
-  // === バックトラッキングで平日当直を決定 ===
-  // 各メンバーの残り回数
-  const remaining = {};
-  tochokuMembers.forEach(m=>{remaining[m.id]=monthlyConfig[m.id]?.tW||0;});
-
-  // 各平日の候補者を事前計算（休日当直との中4日も考慮）
-  // ※休日当直は既にscheduleに入っているのでhasNearbyTochokuが見てくれる
-  function candidatesFor(day, assignment){
-    return tochokuMembers.filter(m=>{
-      if(dayState(m.id, day) >= 1) return false; // 希望休
-      if(remaining[m.id] <= 0) return false; // 回数上限
-      // 中4日チェック（assignmentと休日当直の両方）
-      if(nearbyConflict(m.id, day, assignment)) return false;
-      return true;
-    });
-  }
-
-  // 中4日チェック: assignment(平日の仮置き)と休日当直スケジュールの両方を見る
-  function nearbyConflict(memberId, day, assignment){
-    const span = 4; // 中4日 = 前後4日以内NG
+  // 中N日チェック（span=前後何日以内をNGとするか）
+  function nearbyConflict(memberId, day, assignment, span){
     const cur = new Date(day+'T00:00:00');
     for(let i=1; i<=span; i++){
       for(const sign of [-1,1]){
         const d = new Date(cur); d.setDate(d.getDate()+sign*i);
         const ds = toDateStr(d);
-        // 休日当直（確定済み）
-        if(schedule[ds]?.tochoku === memberId && isHeavy(ds)) return true;
-        // 平日の仮置き
-        if(assignment[ds] === memberId) return true;
+        if(schedule[ds]?.tochoku === memberId && isHeavy(ds)) return true; // 休日当直
+        if(assignment[ds] === memberId) return true; // 平日仮置き
       }
     }
-    // 前月当直
     for(const [pd, pid] of Object.entries(prevMonthTochoku)){
       if(pid === memberId && getDayDiff(day, pd) <= span) return true;
     }
     return false;
   }
 
-  // バックトラッキング本体
-  const assignment = {}; // {dateStr: memberId}
-  const startTime = Date.now();
-  const TIMEOUT = 3000; // 3秒
-  let timedOut = false;
+  // 指定spanでバックトラッキング。解が見つかればassignmentを返す、なければnull
+  function solveWithSpan(span, timeoutMs){
+    const assignment = {};
+    const remaining = {};
+    tochokuMembers.forEach(m=>{remaining[m.id]=monthlyConfig[m.id]?.tW||0;});
+    const startTime = Date.now();
+    let timedOut = false;
 
-  // 制約が厳しい日（候補が少ない日）から埋めるため、動的に並べ替え
-  function backtrack(remainingDays){
-    if(Date.now() - startTime > TIMEOUT){ timedOut = true; return false; }
-    if(remainingDays.length === 0) return true; // 全部埋まった
+    function candidatesFor(day){
+      return tochokuMembers.filter(m=>{
+        if(dayState(m.id, day) >= 1) return false;
+        if(remaining[m.id] <= 0) return false;
+        if(nearbyConflict(m.id, day, assignment, span)) return false;
+        return true;
+      });
+    }
 
-    // 候補数が最小の日を選ぶ（most-constrained-first）
-    let bestDay = null, bestCands = null, bestIdx = -1;
-    for(let i=0; i<remainingDays.length; i++){
-      const day = remainingDays[i];
-      const cands = candidatesFor(day, assignment);
-      if(bestCands === null || cands.length < bestCands.length){
-        bestDay = day; bestCands = cands; bestIdx = i;
-        if(cands.length === 0) break; // 0なら即座に失敗確定
+    function backtrack(remainingDays){
+      if(Date.now() - startTime > timeoutMs){ timedOut = true; return false; }
+      if(remainingDays.length === 0) return true;
+
+      let bestCands = null, bestIdx = -1;
+      for(let i=0; i<remainingDays.length; i++){
+        const cands = candidatesFor(remainingDays[i]);
+        if(bestCands === null || cands.length < bestCands.length){
+          bestCands = cands; bestIdx = i;
+          if(cands.length === 0) break;
+        }
       }
+      if(bestCands.length === 0) return false;
+
+      const bestDay = remainingDays[bestIdx];
+      const shuffled = [...bestCands].sort((a,b)=>{
+        if(remaining[b.id]!==remaining[a.id]) return remaining[b.id]-remaining[a.id];
+        return Math.random()-0.5;
+      });
+      const rest = remainingDays.filter((_,i)=>i!==bestIdx);
+
+      for(const mem of shuffled){
+        assignment[bestDay] = mem.id;
+        remaining[mem.id]--;
+        if(backtrack(rest)) return true;
+        delete assignment[bestDay];
+        remaining[mem.id]++;
+      }
+      return false;
     }
 
-    if(bestCands.length === 0) return false; // この日は埋められない→戻る
-
-    // 候補をシャッフル（バリエーション）＋残り回数の多い順
-    const shuffled = [...bestCands].sort((a,b)=>{
-      if(remaining[b.id]!==remaining[a.id]) return remaining[b.id]-remaining[a.id];
-      return Math.random()-0.5;
-    });
-
-    const rest = remainingDays.filter((_,i)=>i!==bestIdx);
-
-    for(const mem of shuffled){
-      // 仮置き
-      assignment[bestDay] = mem.id;
-      remaining[mem.id]--;
-      if(backtrack(rest)) return true;
-      // 戻す
-      delete assignment[bestDay];
-      remaining[mem.id]++;
-    }
-    return false;
+    const solved = backtrack([...weekdays]);
+    return solved ? assignment : null;
   }
 
-  // デバッグ: 各平日の初期候補数をコンソール出力
-  console.log('=== 平日生成デバッグ ===');
-  console.log('対象メンバー:', tochokuMembers.map(m=>`${m.name}(${remaining[m.id]}回)`).join(', '));
-  console.log('平日枠数:', weekdays.length, '必要回数合計:', Object.values(remaining).reduce((a,b)=>a+b,0));
-  weekdays.forEach(d=>{
-    const c = candidatesFor(d, {});
-    console.log(`${d}: 候補${c.length}人 [${c.map(m=>m.name).join(',')}]`);
-  });
-  console.log('前月当直:', JSON.stringify(prevMonthTochoku));
+  // 中4日→中3日→中2日と段階的に緩和
+  let result = null;
+  let usedSpan = 4;
+  for(const span of [4,3,2]){
+    result = solveWithSpan(span, 3000);
+    if(result){ usedSpan = span; break; }
+  }
 
-  const solved = backtrack([...weekdays]);
-  console.log('解けた:', solved, 'タイムアウト:', timedOut);
-
-  // 結果を反映
-  if(solved){
-    Object.entries(assignment).forEach(([ds,mid])=>{ schedule[ds].tochoku = mid; });
-  } else {
-    // 部分解：assignmentに入っている分だけ反映
-    Object.entries(assignment).forEach(([ds,mid])=>{ schedule[ds].tochoku = mid; });
-    if(timedOut){
-      warnings.push('時間内に完全な解が見つかりませんでした（タイムアウト）。手動で調整してください。');
-    } else {
-      warnings.push('全枠を埋める解が存在しません。回数設定または希望休を見直してください。');
+  if(result){
+    Object.entries(result).forEach(([ds,mid])=>{ schedule[ds].tochoku = mid; });
+    if(usedSpan < 4){
+      warnings.push(`中${usedSpan}日ルールで生成しました（中4日では解が見つからなかったため）`);
     }
+  } else {
+    warnings.push('中2日まで緩和しても全枠を埋める解が見つかりませんでした。回数設定または希望休を見直してください。');
     weekdays.filter(d=>!schedule[d]?.tochoku).forEach(d=>{
       warnings.push(`${d}：平日当直が空欄です`);
-    });
-    // 回数未達の警告
-    tochokuMembers.forEach(m=>{
-      const got = countT(m.id).tW;
-      const need = monthlyConfig[m.id]?.tW||0;
-      if(got < need) warnings.push(`${m.name}：平日当直${need}回中${got}回のみ`);
     });
   }
 
   // === oncall配置 ===
-  // 不整脈当直日と虚血当直日を分ける
   const arrhDays = weekdays.filter(d=>{
-    const t=schedule[d]?.tochoku;
-    if(!t)return false;
+    const t=schedule[d]?.tochoku;if(!t)return false;
     const m=fixedConfig.members.find(x=>x.id===t);
-    return m && !m.canOncall; // 不整脈
+    return m && !m.canOncall;
   });
   const ischDays = weekdays.filter(d=>{
-    const t=schedule[d]?.tochoku;
-    if(!t)return false;
+    const t=schedule[d]?.tochoku;if(!t)return false;
     const m=fixedConfig.members.find(x=>x.id===t);
-    return m && m.canOncall; // 虚血
+    return m && m.canOncall;
   });
 
-  // oncall配置ヘルパー：残り回数の少ない人を強く優先して均等化
   function assignOncallForDays(dayList){
     dayList.forEach(day=>{
       const tDoc=schedule[day]?.tochoku;if(!tDoc)return;
@@ -2199,7 +2163,7 @@ function generateWeekday(){
       const avail=pool.filter(m=>canAssignOncall(m,day,tDoc,false));
       avail.sort((a,b)=>{
         const ua=countOC(a.id).ocW, ub=countOC(b.id).ocW;
-        if(ua!==ub) return ua-ub; // 既に入れた回数の少ない人優先
+        if(ua!==ub) return ua-ub;
         return Math.random()-0.5;
       });
       let chosen=avail.slice(0,needed);
@@ -2215,7 +2179,6 @@ function generateWeekday(){
     });
   }
 
-  // まず不整脈当直日（虚血oncallを均等に）→ 次に虚血当直日
   assignOncallForDays(arrhDays);
   assignOncallForDays(ischDays);
 
