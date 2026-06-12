@@ -1538,6 +1538,20 @@ function countOC(memberId){
   return{ocW,ocH};
 }
 
+// 指定メンバーが「不整脈当直日」のoncallを担当した回数（平日・休日合算）
+function countArrhOncall(memberId){
+  let cnt = 0;
+  Object.entries(schedule).forEach(([day, s])=>{
+    if(!s.oncall || !s.oncall.includes(memberId)) return;
+    const tDoc = s.tochoku;
+    if(!tDoc) return;
+    const tMem = fixedConfig.members.find(m=>m.id===tDoc);
+    if(tMem && !tMem.canOncall) cnt++; // 当直者が不整脈
+  });
+  return cnt;
+}
+
+
 // =====================
 // WIZARD FUNCTIONS
 // =====================
@@ -1877,9 +1891,17 @@ function generateHeavy(){
       const tDoc = schedule[satDay].tochoku;
       const pool = getOncallPool(tDoc);
       const needed = getOncallNeeded(tDoc);
+      const satTMem = fixedConfig.members.find(m=>m.id===tDoc);
+      const satIsArrh = satTMem && !satTMem.canOncall;
       const avail = pool.filter(m=>canAssignOncall(m,satDay,tDoc,true));
       avail.sort((a,b)=>{
-        // 同じ週の日曜に当直が入っている人を強く優先
+        if(satIsArrh){
+          // 不整脈当直日：不整脈当直日oncallの担当回数（平日・休日合算）で均等化
+          const ua=countArrhOncall(a.id), ub=countArrhOncall(b.id);
+          if(ua!==ub) return ua-ub;
+          return Math.random()-0.5;
+        }
+        // 虚血当直日：同一週セット優先＋設定回数
         const aW = sunDay&&schedule[sunDay]?.tochoku===a.id ? -20 : 0;
         const bW = sunDay&&schedule[sunDay]?.tochoku===b.id ? -20 : 0;
         const ra=monthlyConfig[a.id]?.ocH||0, ua=countOC(a.id).ocH;
@@ -1903,9 +1925,17 @@ function generateHeavy(){
       const satOncall = schedule[satDay]?.oncall||[];
       const pool = getOncallPool(tDoc);
       const needed = getOncallNeeded(tDoc);
+      const sunTMem = fixedConfig.members.find(m=>m.id===tDoc);
+      const sunIsArrh = sunTMem && !sunTMem.canOncall;
       const avail = pool.filter(m=>canAssignOncall(m,sunDay,tDoc,true));
       avail.sort((a,b)=>{
-        // 土曜当直者・土曜oncall者を優先（同一週集約）
+        if(sunIsArrh){
+          // 不整脈当直日：担当回数（平日・休日合算）で均等化
+          const ua=countArrhOncall(a.id), ub=countArrhOncall(b.id);
+          if(ua!==ub) return ua-ub;
+          return Math.random()-0.5;
+        }
+        // 虚血当直日：土曜当直者・土曜oncall者を優先（同一週集約）
         const aB = a.id===satTDoc ? -20 : satOncall.includes(a.id) ? -10 : 0;
         const bB = b.id===satTDoc ? -20 : satOncall.includes(b.id) ? -10 : 0;
         const ra=monthlyConfig[a.id]?.ocH||0, ua=countOC(a.id).ocH;
@@ -2155,14 +2185,16 @@ function generateWeekday(){
     return m && m.canOncall;
   });
 
-  function assignOncallForDays(dayList){
+  function assignOncallForDays(dayList, useArrhCount){
     dayList.forEach(day=>{
       const tDoc=schedule[day]?.tochoku;if(!tDoc)return;
       const pool=getOncallPool(tDoc);
       const needed=getOncallNeeded(tDoc);
       const avail=pool.filter(m=>canAssignOncall(m,day,tDoc,false));
       avail.sort((a,b)=>{
-        const ua=countOC(a.id).ocW, ub=countOC(b.id).ocW;
+        // 不整脈当直日は休日分も合算した担当回数で均等化
+        const ua = useArrhCount ? countArrhOncall(a.id) : countOC(a.id).ocW;
+        const ub = useArrhCount ? countArrhOncall(b.id) : countOC(b.id).ocW;
         if(ua!==ub) return ua-ub;
         return Math.random()-0.5;
       });
@@ -2179,8 +2211,8 @@ function generateWeekday(){
     });
   }
 
-  assignOncallForDays(arrhDays);
-  assignOncallForDays(ischDays);
+  assignOncallForDays(arrhDays, true);   // 不整脈当直日：休日分も合算して均等化
+  assignOncallForDays(ischDays, false);  // 虚血当直日：設定回数通り
 
   showWarnings(warnings,'gen-weekday-warnings');
   renderFullCalendar();
