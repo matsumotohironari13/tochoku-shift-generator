@@ -1551,6 +1551,64 @@ function countArrhOncall(memberId){
   return cnt;
 }
 
+// 不整脈当直日oncallの担当回数を平日の入れ替えで均等化
+// 休日分は固定。平日の不整脈当直日oncallのみ入れ替える
+function balanceArrhOncall(arrhWeekdays){
+  const pool = getOncallPool(fixedConfig.members.find(m=>m.canOncall && !isVisitingMember(m.id)).id);
+  let iterations = 0;
+  const maxIter = 100;
+
+  while(iterations++ < maxIter){
+    // 各人の不整脈当直日oncall担当回数
+    const counts = {};
+    pool.forEach(m=>{ counts[m.id] = countArrhOncall(m.id); });
+
+    // 最多・最少を見つける
+    let maxM = null, minM = null;
+    pool.forEach(m=>{
+      if(maxM===null || counts[m.id]>counts[maxM]) maxM = m.id;
+      if(minM===null || counts[m.id]<counts[minM]) minM = m.id;
+    });
+
+    if(counts[maxM] - counts[minM] <= 1) break; // 差1以下なら均等とみなす
+
+    // maxMが入っている平日の不整脈当直日を探し、minMに置き換えられるか試す
+    let swapped = false;
+    for(const day of arrhWeekdays){
+      const s = schedule[day];
+      if(!s || !s.oncall.includes(maxM)) continue;
+      const tDoc = s.tochoku;
+      // minMがこの日にoncall可能か（maxMを除いた状態で判定）
+      const idx = s.oncall.indexOf(maxM);
+      // 一時的にmaxMを外してminMが入れるかチェック
+      const without = s.oncall.filter(x=>x!==maxM);
+      // minMの条件チェック
+      const minMember = fixedConfig.members.find(m=>m.id===minM);
+      if(!minMember) continue;
+      if(minM === tDoc) continue; // 当直者本人
+      if(dayState(minM, day) === 1) continue; // 希望休
+      if(isNGPair(tDoc, minM)) continue; // NGペア
+      if(without.includes(minM)) continue; // 既に入っている
+      // minMの平日oncall設定回数チェック（入れ替えで+1されるが、maxMが-1されるので総数は不変）
+      // minMが設定上限に達していれば入れ替え不可
+      if(countOC(minM).ocW >= (monthlyConfig[minM]?.ocW||0)) continue;
+      // 連続oncall上限チェック
+      if(!canAssignOncall(minMember, day, tDoc, false)){
+        // canAssignOncallは設定回数も見るので、既に上で弾かれてなければ連続上限等を確認
+        continue;
+      }
+
+      // 入れ替え実行
+      s.oncall[idx] = minM;
+      swapped = true;
+      break;
+    }
+
+    if(!swapped) break; // これ以上改善できない
+  }
+}
+
+
 
 // =====================
 // WIZARD FUNCTIONS
@@ -2186,7 +2244,15 @@ function generateWeekday(){
   });
 
   function assignOncallForDays(dayList, useArrhCount){
-    dayList.forEach(day=>{
+    // 候補が少ない日（制約が厳しい日）から先に処理して偏りを減らす
+    const sortedDays = [...dayList].sort((d1,d2)=>{
+      const t1=schedule[d1]?.tochoku, t2=schedule[d2]?.tochoku;
+      if(!t1||!t2) return 0;
+      const c1=getOncallPool(t1).filter(m=>canAssignOncall(m,d1,t1,false)).length;
+      const c2=getOncallPool(t2).filter(m=>canAssignOncall(m,d2,t2,false)).length;
+      return c1-c2;
+    });
+    sortedDays.forEach(day=>{
       const tDoc=schedule[day]?.tochoku;if(!tDoc)return;
       const pool=getOncallPool(tDoc);
       const needed=getOncallNeeded(tDoc);
@@ -2214,6 +2280,10 @@ function generateWeekday(){
   }
 
   assignOncallForDays(arrhDays, true);   // 不整脈当直日：休日分も合算して均等化
+
+  // 不整脈当直日oncallの偏りを入れ替えで是正（平日の範囲のみ・休日は固定）
+  balanceArrhOncall(arrhDays);
+
   assignOncallForDays(ischDays, false);  // 虚血当直日：設定回数通り
 
   showWarnings(warnings,'gen-weekday-warnings');
